@@ -777,48 +777,59 @@ export default function Home() {
         Apna Mall Pakistan · Quality Products · Great Prices
       </div>
 
-      <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5]">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-5 py-4">
-          <a href="#" className="text-2xl font-black text-[#075b3b]">
-            Apna <span className="text-[#e6a000]">Mall</span>
-            <span className="block text-center text-[10px] tracking-[5px]">
-              PAKISTAN
-            </span>
-          </a>
+   <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
+  <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
+    {/* Logo and action buttons */}
+    <div className="flex items-center justify-between gap-2">
+      <a href="#" className="shrink-0 text-xl font-black leading-tight text-[#075b3b] sm:text-2xl">
+        Apna <span className="text-[#e6a000]">Mall</span>
+        <span className="mt-1 block text-center text-[9px] tracking-[4px]">
+          PAKISTAN
+        </span>
+      </a>
 
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products..."
-            aria-label="Search products"
-            className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none focus:border-[#075b3b]"
-          />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            setAccountOpen(true);
+            setAuthMessage("");
+          }}
+          className="rounded-lg border border-[#075b3b] px-2 py-2 text-xs font-bold text-[#075b3b] sm:px-4 sm:py-3 sm:text-sm"
+        >
+          {authLoading ? "Account..." : user ? "My Account" : "Login"}
+        </button>
 
-          <button
-            onClick={() => {
-              setAccountOpen(true);
-              setAuthMessage("");
-            }}
-            className="rounded-lg border border-[#075b3b] px-3 py-3 font-bold text-[#075b3b]"
-          >
-            {authLoading
-              ? "Account..."
-              : user
-                ? "My Account"
-                : "Login / Sign up"}
-          </button>
+        <button
+          onClick={() => {
+            setBuyNowItem(null);
+            setCartOpen(true);
+          }}
+          className="whitespace-nowrap rounded-lg bg-[#075b3b] px-3 py-2 text-xs font-bold text-white sm:px-4 sm:py-3 sm:text-sm"
+        >
+          🛒 Cart ({count})
+        </button>
+      </div>
+    </div>
 
-          <button
-            onClick={() => {
-              setBuyNowItem(null);
-              setCartOpen(true);
-            }}
-            className="rounded-lg bg-[#075b3b] px-4 py-3 font-bold text-white"
-          >
-            🛒 Cart ({count})
-          </button>
-        </div>
-      </header>
+    {/* Full-width search bar */}
+    <div className="mt-3">
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+          🔍
+        </span>
+
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search products..."
+          aria-label="Search products"
+          className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-base outline-none transition focus:border-[#075b3b] focus:ring-2 focus:ring-[#075b3b]/15"
+        />
+      </div>
+    </div>
+  </div>
+</header>
+
 
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
