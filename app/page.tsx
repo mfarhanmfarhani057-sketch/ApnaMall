@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -85,6 +84,12 @@ export default function Home() {
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Show a real link after the order has been saved. This avoids
+  // relying on a temporary popup, which often fails on mobile browsers.
+  const [whatsappOrderUrl, setWhatsappOrderUrl] = useState("");
+  const [lastOrderNumber, setLastOrderNumber] = useState("");
+  const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null);
 
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -372,8 +377,6 @@ export default function Home() {
       ...old,
       [product.id]: (old[product.id] || 0) + 1,
     }));
-
-    // Stay on the storefront.
   }
 
   function startBuyNow(product: Product) {
@@ -381,6 +384,10 @@ export default function Home() {
       alert("This product is out of stock.");
       return;
     }
+
+    setWhatsappOrderUrl("");
+    setLastOrderNumber("");
+    setLastOrderTotal(null);
 
     // Do not add this product to the cart.
     // Checkout will contain this product only.
@@ -601,7 +608,7 @@ export default function Home() {
   }
 
   async function sendOrder() {
-    if (isSubmitting) return;
+    if (isSubmitting || whatsappOrderUrl) return;
 
     if (!checkoutItems.length) {
       alert(
@@ -636,23 +643,19 @@ export default function Home() {
       }
     }
 
-    const whatsappWindow = window.open("about:blank", "_blank");
-
-    if (!whatsappWindow) {
-      alert("Please allow pop-ups for this website and try again.");
-      return;
-    }
-
-    whatsappWindow.opener = null;
     setIsSubmitting(true);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
+
+      const accessToken = sessionData.session?.access_token;
 
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
@@ -679,8 +682,6 @@ export default function Home() {
       const result = (await response.json()) as CheckoutResponse;
 
       if (!response.ok || result.success !== true || !result.order_number) {
-        whatsappWindow.close();
-
         alert(
           result.error ||
             "We couldn't save your order. Please check your cart and try again."
@@ -730,17 +731,18 @@ export default function Home() {
         `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 
       if (whatsappUrl.length > 7000) {
-        whatsappWindow.close();
-
         alert(
           `Order ${result.order_number} was saved, but its WhatsApp message is too long. Please contact the store directly.`
         );
         return;
       }
 
-      whatsappWindow.location.href = whatsappUrl;
+      // Show the WhatsApp link on the page instead of opening a popup.
+      setLastOrderNumber(result.order_number);
+      setLastOrderTotal(savedTotal);
+      setWhatsappOrderUrl(whatsappUrl);
 
-      // Normal cart checkout clears purchased cart items.
+      // Normal cart checkout clears the purchased cart.
       // Buy Now leaves the customer's existing cart unchanged.
       if (!buyNowItem) {
         setCart({});
@@ -752,23 +754,28 @@ export default function Home() {
       setEmail("");
       setCity("");
       setAddress("");
-      setCartOpen(false);
 
       if (user) {
         void loadOrders();
       }
-
-      alert(`Order saved successfully! Order number: ${result.order_number}`);
     } catch (error) {
       console.error("Checkout request failed:", error);
-      whatsappWindow.close();
 
       alert(
-        "Could not contact the checkout server. Please check your connection before trying again."
+        error instanceof Error
+          ? `Checkout failed: ${error.message}`
+          : "Could not contact the checkout server. Please check your connection and try again."
       );
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function resetCheckoutSuccess() {
+    setWhatsappOrderUrl("");
+    setLastOrderNumber("");
+    setLastOrderTotal(null);
+    setBuyNowItem(null);
   }
 
   return (
@@ -777,59 +784,59 @@ export default function Home() {
         Apna Mall Pakistan · Quality Products · Great Prices
       </div>
 
-   <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
-  <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
-    {/* Logo and action buttons */}
-    <div className="flex items-center justify-between gap-2">
-      <a href="#" className="shrink-0 text-xl font-black leading-tight text-[#075b3b] sm:text-2xl">
-        Apna <span className="text-[#e6a000]">Mall</span>
-        <span className="mt-1 block text-center text-[9px] tracking-[4px]">
-          PAKISTAN
-        </span>
-      </a>
+      <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
+        <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <a
+              href="#"
+              className="shrink-0 text-xl font-black leading-tight text-[#075b3b] sm:text-2xl"
+            >
+              Apna <span className="text-[#e6a000]">Mall</span>
+              <span className="mt-1 block text-center text-[9px] tracking-[4px]">
+                PAKISTAN
+              </span>
+            </a>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => {
-            setAccountOpen(true);
-            setAuthMessage("");
-          }}
-          className="rounded-lg border border-[#075b3b] px-2 py-2 text-xs font-bold text-[#075b3b] sm:px-4 sm:py-3 sm:text-sm"
-        >
-          {authLoading ? "Account..." : user ? "My Account" : "Login"}
-        </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setAccountOpen(true);
+                  setAuthMessage("");
+                }}
+                className="rounded-lg border border-[#075b3b] px-2 py-2 text-xs font-bold text-[#075b3b] sm:px-4 sm:py-3 sm:text-sm"
+              >
+                {authLoading ? "Account..." : user ? "My Account" : "Login"}
+              </button>
 
-        <button
-          onClick={() => {
-            setBuyNowItem(null);
-            setCartOpen(true);
-          }}
-          className="whitespace-nowrap rounded-lg bg-[#075b3b] px-3 py-2 text-xs font-bold text-white sm:px-4 sm:py-3 sm:text-sm"
-        >
-          🛒 Cart ({count})
-        </button>
-      </div>
-    </div>
+              <button
+                onClick={() => {
+                  setBuyNowItem(null);
+                  setCartOpen(true);
+                }}
+                className="whitespace-nowrap rounded-lg bg-[#075b3b] px-3 py-2 text-xs font-bold text-white sm:px-4 sm:py-3 sm:text-sm"
+              >
+                🛒 Cart ({count})
+              </button>
+            </div>
+          </div>
 
-    {/* Full-width search bar */}
-    <div className="mt-3">
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-          🔍
-        </span>
+          <div className="mt-3">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                🔍
+              </span>
 
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search products..."
-          aria-label="Search products"
-          className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-base outline-none transition focus:border-[#075b3b] focus:ring-2 focus:ring-[#075b3b]/15"
-        />
-      </div>
-    </div>
-  </div>
-</header>
-
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search products..."
+                aria-label="Search products"
+                className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-base outline-none transition focus:border-[#075b3b] focus:ring-2 focus:ring-[#075b3b]/15"
+              />
+            </div>
+          </div>
+        </div>
+      </header>
 
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
@@ -1172,91 +1179,144 @@ export default function Home() {
             )}
 
             <div className="flex justify-between border-t py-4 text-xl font-black">
-              <span>{buyNowItem ? "Selected total" : "Cart total"}</span>
-              <span>{money(total)}</span>
+              <span>
+                {whatsappOrderUrl
+                  ? "Saved order total"
+                  : buyNowItem
+                    ? "Selected total"
+                    : "Cart total"}
+              </span>
+              <span>
+                {money(
+                  whatsappOrderUrl && lastOrderTotal !== null
+                    ? lastOrderTotal
+                    : total
+                )}
+              </span>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void sendOrder();
-              }}
-              className="space-y-4"
-            >
-              <label className="block text-sm font-semibold">
-                Full name *
-                <input
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  autoComplete="name"
-                  className="mt-1 w-full rounded-lg border p-3 font-normal"
-                />
-              </label>
+            {whatsappOrderUrl ? (
+              <div className="space-y-4 rounded-xl border border-green-200 bg-green-50 p-5">
+                <div className="text-center">
+                  <p className="text-2xl">✅</p>
+                  <h3 className="mt-2 text-lg font-black text-[#075b3b]">
+                    Order Saved Successfully!
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-700">
+                    Order number: <strong>{lastOrderNumber}</strong>
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Tap the button below to open WhatsApp and send your order
+                    to Apna Mall.
+                  </p>
+                </div>
 
-              <label className="block text-sm font-semibold">
-                Email address *
-                <input
-                  required
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  className="mt-1 w-full rounded-lg border p-3 font-normal"
-                />
-              </label>
+                <a
+                  href={whatsappOrderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full rounded-lg bg-[#168b4e] p-4 text-center font-black text-white"
+                >
+                  Continue to WhatsApp →
+                </a>
 
-              <label className="block text-sm font-semibold">
-                Mobile / WhatsApp number *
-                <input
-                  required
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  autoComplete="tel"
-                  placeholder="03xx xxxxxxx"
-                  className="mt-1 w-full rounded-lg border p-3 font-normal"
-                />
-              </label>
+                <p className="text-center text-xs leading-5 text-gray-600">
+                  If WhatsApp does not open, try the button again or choose
+                  WhatsApp when your phone asks which app to use. You must
+                  press Send in WhatsApp to send the message.
+                </p>
 
-              <label className="block text-sm font-semibold">
-                City *
-                <input
-                  required
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  autoComplete="address-level2"
-                  placeholder="Your city"
-                  className="mt-1 w-full rounded-lg border p-3 font-normal"
-                />
-              </label>
-
-              <label className="block text-sm font-semibold">
-                Delivery address *
-                <textarea
-                  required
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  autoComplete="street-address"
-                  placeholder="House number, street, area..."
-                  className="mt-1 w-full rounded-lg border p-3 font-normal"
-                  rows={3}
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={isSubmitting || checkoutItems.length === 0}
-                className="w-full rounded-lg bg-[#168b4e] p-4 font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                <button
+                  type="button"
+                  onClick={resetCheckoutSuccess}
+                  className="w-full rounded-lg border border-gray-300 p-3 font-bold text-gray-700"
+                >
+                  Place Another Order
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void sendOrder();
+                }}
+                className="space-y-4"
               >
-                {isSubmitting
-                  ? "Saving Order..."
-                  : buyNowItem
-                    ? "Buy Selected Product & Continue"
-                    : "Place Cart Order & Continue to WhatsApp"}
-              </button>
-            </form>
+                <label className="block text-sm font-semibold">
+                  Full name *
+                  <input
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
+                    className="mt-1 w-full rounded-lg border p-3 font-normal"
+                  />
+                </label>
+
+                <label className="block text-sm font-semibold">
+                  Email address *
+                  <input
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    className="mt-1 w-full rounded-lg border p-3 font-normal"
+                  />
+                </label>
+
+                <label className="block text-sm font-semibold">
+                  Mobile / WhatsApp number *
+                  <input
+                    required
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="tel"
+                    placeholder="03xx xxxxxxx"
+                    className="mt-1 w-full rounded-lg border p-3 font-normal"
+                  />
+                </label>
+
+                <label className="block text-sm font-semibold">
+                  City *
+                  <input
+                    required
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    autoComplete="address-level2"
+                    placeholder="Your city"
+                    className="mt-1 w-full rounded-lg border p-3 font-normal"
+                  />
+                </label>
+
+                <label className="block text-sm font-semibold">
+                  Delivery address *
+                  <textarea
+                    required
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    autoComplete="street-address"
+                    placeholder="House number, street, area..."
+                    className="mt-1 w-full rounded-lg border p-3 font-normal"
+                    rows={3}
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || checkoutItems.length === 0}
+                  className="w-full rounded-lg bg-[#168b4e] p-4 font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting
+                    ? "Saving Order..."
+                    : buyNowItem
+                      ? "Buy Selected Product & Continue"
+                      : "Place Cart Order & Continue to WhatsApp"}
+                </button>
+              </form>
+            )}
 
             <p className="mt-4 text-xs leading-5 text-gray-500">
               Your order is saved before WhatsApp opens. You must press Send
