@@ -282,7 +282,7 @@ export default function Home() {
           return next;
         });
       } catch (error) {
-        console.error("Failed to load Apna Mall products:", error);
+        console.error("Failed to load Kamalia Cart products:", error);
 
         if (!cancelled) {
           setLoadError(
@@ -790,7 +790,7 @@ export default function Home() {
           : savedSubtotal + shippingFee;
 
       const message = [
-        "APNA MALL PAKISTAN — ORDER",
+        "Kamalia Cart PAKISTAN — ORDER",
         "",
         `Order number: ${result.order_number}`,
         `Customer: ${name.trim()}`,
@@ -863,7 +863,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f7f8f4] text-[#17251d]">
       <div className="bg-[#075b3b] px-4 py-2 text-center text-sm text-white">
-        Apna Mall Pakistan · Quality Products · Great Prices
+        Kamalia Cart Pakistan · Quality Products · Great Prices
       </div>
 
       {/* Header */}
@@ -933,7 +933,7 @@ export default function Home() {
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
           <div>
             <p className="font-bold uppercase tracking-[3px] text-[#08784b]">
-              Welcome to Apna Mall
+              Welcome to Kamalia Cart
             </p>
 
             <h1 className="mt-3 text-5xl font-black leading-tight text-[#075b3b] md:text-6xl">
@@ -1015,7 +1015,7 @@ export default function Home() {
 
         {loading && (
           <p className="rounded-xl bg-white p-8 text-center text-gray-600">
-            Loading products from Apna Mall...
+            Loading products from Kamalia Cart...
           </p>
         )}
 
@@ -1132,7 +1132,7 @@ export default function Home() {
       <footer className="bg-[#102f22] px-5 py-9 text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-6">
           <div>
-            <h2 className="text-xl font-black">Apna Mall Pakistan</h2>
+            <h2 className="text-xl font-black">Kamalia Cart Pakistan</h2>
             <p className="mt-2 text-sm text-gray-300">
               Shop smart. Shop local.
             </p>
@@ -1377,7 +1377,7 @@ export default function Home() {
                 </div>
 
                 <p className="mt-4 text-xs leading-5 text-gray-500">
-                  Orders are processed through the existing Apna Mall
+                  Orders are processed through the existing Kamalia Cart
                   checkout and WhatsApp process.
                 </p>
               </div>
@@ -1586,7 +1586,7 @@ export default function Home() {
 
                   <p className="mt-2 text-sm text-gray-600">
                     Tap below to open WhatsApp and send your order to
-                    Apna Mall.
+                    Kamalia Cart.
                   </p>
                 </div>
 
@@ -1717,7 +1717,7 @@ export default function Home() {
           <section className="relative my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-2xl font-black text-[#075b3b]">
-                {user ? "My Account" : "Welcome to Apna Mall"}
+                {user ? "My Account" : "Welcome to Kamalia Cart"}
               </h2>
 
               <button
