@@ -4,14 +4,11 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
 import { supabase } from "@/lib/supabase";
-import {
-  buildCustomerAuthEmail,
-  normalizeCustomerUsername,
-} from "@/lib/customer-auth";
 import type { User } from "@supabase/supabase-js";
 
 type CategoryRow = {
@@ -69,7 +66,8 @@ type OrderRow = {
 const whatsappNumber = "923291311746";
 const CART_STORAGE_KEY = "Kamalia-Cart-cart-v1";
 
-const money = (amount: number) => `Rs ${amount.toLocaleString("en-PK")}`;
+const money = (amount: number) =>
+  `Rs ${amount.toLocaleString("en-PK")}`;
 
 function getProductImages(
   value: unknown,
@@ -108,6 +106,9 @@ export default function Home() {
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+  const searchRef = useRef<HTMLDivElement | null>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
 
   const [cart, setCart] = useState<Record<number, number>>({});
   const [cartLoaded, setCartLoaded] = useState(false);
@@ -134,15 +135,18 @@ export default function Home() {
 
   const [whatsappOrderUrl, setWhatsappOrderUrl] = useState("");
   const [lastOrderNumber, setLastOrderNumber] = useState("");
-  const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null);
+  const [lastOrderTotal, setLastOrderTotal] =
+    useState<number | null>(null);
 
   // Customer authentication.
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [authUsername, setAuthUsername] = useState("");
+  const [authMode, setAuthMode] =
+    useState<"login" | "signup">("login");
+  const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authName, setAuthName] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
 
@@ -150,6 +154,48 @@ export default function Home() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
+
+  const searchResults = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    if (!normalizedSearch) return [];
+
+    return products
+      .filter((product) => {
+        const searchableText = [
+          product.name,
+          product.category,
+          product.slug,
+          product.description ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(normalizedSearch);
+      })
+      .slice(0, 8);
+  }, [products, search]);
+
+  useEffect(() => {
+    setActiveSearchIndex(0);
+  }, [search]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target as Node)
+      ) {
+        setSearchFocused(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, []);
 
   // Restore the cart from this browser.
   useEffect(() => {
@@ -190,6 +236,7 @@ export default function Home() {
     }
   }, []);
 
+  // Save cart changes after restoring the saved cart.
   useEffect(() => {
     if (!cartLoaded) return;
 
@@ -200,6 +247,7 @@ export default function Home() {
     }
   }, [cart, cartLoaded]);
 
+  // Load products, categories, images, and video URLs.
   useEffect(() => {
     let cancelled = false;
 
@@ -226,8 +274,11 @@ export default function Home() {
         if (categoryResult.error) throw categoryResult.error;
         if (productResult.error) throw productResult.error;
 
-        const categoryRows = (categoryResult.data ?? []) as CategoryRow[];
-        const productRows = (productResult.data ?? []) as ProductRow[];
+        const categoryRows =
+          (categoryResult.data ?? []) as CategoryRow[];
+
+        const productRows =
+          (productResult.data ?? []) as ProductRow[];
 
         const categoryNames = new Map(
           categoryRows.map((item) => [item.id, item.name])
@@ -250,8 +301,13 @@ export default function Home() {
         if (cancelled) return;
 
         setProducts(loadedProducts);
-        setCategories(["All", ...categoryRows.map((item) => item.name)]);
+        setCategories([
+          "All",
+          ...categoryRows.map((item) => item.name),
+        ]);
 
+        // Remove unavailable products from the saved cart and
+        // clamp quantities to the available stock.
         setCart((old) => {
           const next: Record<number, number> = {};
 
@@ -290,6 +346,7 @@ export default function Home() {
     };
   }, []);
 
+  // Restore authentication and listen for login/logout events.
   useEffect(() => {
     let mounted = true;
 
@@ -305,6 +362,8 @@ export default function Home() {
       const currentUser = data.session?.user ?? null;
 
       setUser(currentUser);
+      setAuthEmail(currentUser?.email ?? "");
+      setEmail((old) => old || currentUser?.email || "");
       setAuthLoading(false);
     }
 
@@ -316,6 +375,7 @@ export default function Home() {
       const currentUser = session?.user ?? null;
 
       setUser(currentUser);
+      setAuthEmail(currentUser?.email ?? "");
       setAuthPassword("");
       setAuthMessage("");
       setEmail((old) => old || currentUser?.email || "");
@@ -350,6 +410,7 @@ export default function Home() {
     [products, cart]
   );
 
+  // Determine which items are being purchased.
   const checkoutItems = useMemo(() => {
     if (buyNowItem) {
       const product = products.find(
@@ -358,16 +419,24 @@ export default function Home() {
 
       if (!product || product.stock_quantity <= 0) return [];
 
-      return [{
-        ...product,
-        quantity: Math.min(buyNowItem.quantity, product.stock_quantity),
-      }];
+      return [
+        {
+          ...product,
+          quantity: Math.min(
+            buyNowItem.quantity,
+            product.stock_quantity
+          ),
+        },
+      ];
     }
 
     return cartItems;
   }, [buyNowItem, products, cartItems]);
 
-  const count = cartItems.reduce((sum, p) => sum + p.quantity, 0);
+  const count = cartItems.reduce(
+    (sum, p) => sum + p.quantity,
+    0
+  );
 
   const total = checkoutItems.reduce(
     (sum, p) => sum + p.price * p.quantity,
@@ -440,6 +509,7 @@ export default function Home() {
 
     clearOrderSuccess();
 
+    // This does not add anything to the saved cart.
     setBuyNowItem({
       productId: product.id,
       quantity: Math.min(quantity, product.stock_quantity),
@@ -526,16 +596,14 @@ export default function Home() {
     if (error) throw error;
   }
 
-  async function signInWithUsername(e: FormEvent<HTMLFormElement>) {
+  async function signInWithEmail(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAuthBusy(true);
     setAuthMessage("");
 
     try {
-      const username = normalizeCustomerUsername(authUsername);
-      const email = buildCustomerAuthEmail(username);
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: authEmail.trim(),
         password: authPassword,
       });
 
@@ -554,68 +622,73 @@ export default function Home() {
     }
   }
 
-  async function signUpWithUsername(e: FormEvent<HTMLFormElement>) {
+  async function signUpWithEmail(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAuthBusy(true);
     setAuthMessage("");
 
     try {
-      const username = normalizeCustomerUsername(authUsername);
-      const usernameKey = username.toLowerCase();
-      const email = buildCustomerAuthEmail(username);
-
-      const { data: existingProfile, error: existingProfileError } =
-        await supabase
-          .from("customer_profiles")
-          .select("id")
-          .eq("username_key", usernameKey)
-          .limit(1);
-
-      if (existingProfileError) throw existingProfileError;
-
-      if ((existingProfile ?? []).length > 0) {
-        throw new Error("This username is already taken. Please choose another one.");
-      }
-
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: authEmail.trim(),
         password: authPassword,
         options: {
           data: {
-            customer_username: username,
+            full_name: authName.trim(),
           },
         },
       });
 
       if (error) throw error;
 
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from("customer_profiles")
-          .upsert(
-            {
-              user_id: data.user.id,
-              username,
-              username_key: usernameKey,
-              full_name: null,
-              email: data.user.email ?? email,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" }
-          );
-
-        if (profileError) throw profileError;
-
+      if (data.user && data.session) {
         setUser(data.user);
-        setAuthMessage("Your account was created. You can sign in with your username and password.");
+
+        await saveProfile(
+          data.user,
+          authName,
+          data.user.email ?? authEmail,
+          "",
+          "",
+          ""
+        );
+
+        setAuthMessage("Your account has been created.");
       } else {
-        setAuthMessage("Account created. Check your email confirmation settings in Supabase to continue.");
+        setAuthMessage(
+          "Account created. Check your email for the confirmation link."
+        );
       }
     } catch (error) {
       setAuthMessage(
-        error instanceof Error ? error.message : "Account creation failed."
+        error instanceof Error
+          ? error.message
+          : "Account creation failed."
       );
     } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    setAuthBusy(true);
+    setAuthMessage("");
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      setAuthMessage(
+        error instanceof Error
+          ? error.message
+          : "Google sign-in could not start."
+      );
+
       setAuthBusy(false);
     }
   }
@@ -798,6 +871,8 @@ export default function Home() {
       setLastOrderTotal(savedTotal);
       setWhatsappOrderUrl(whatsappUrl);
 
+      // A normal cart order clears the cart.
+      // Buy Now leaves the saved cart untouched.
       if (!buyNowItem) {
         setCart({});
       }
@@ -836,6 +911,7 @@ export default function Home() {
         Kamalia Cart Pakistan · Quality Products · Great Prices
       </div>
 
+      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-2">
@@ -880,23 +956,121 @@ export default function Home() {
           </div>
 
           <div className="mt-3">
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                🔍
-              </span>
+            <div ref={searchRef} className="relative z-30">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  🔍
+                </span>
 
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products..."
-                aria-label="Search products"
-                className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-3 text-base outline-none transition focus:border-[#075b3b] focus:ring-2 focus:ring-[#075b3b]/15"
-              />
+                <input
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setSearchFocused(true);
+                  }}
+                  onFocus={() => setSearchFocused(true)}
+                  onKeyDown={(event) => {
+                    if (!searchResults.length) return;
+
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setActiveSearchIndex((current) =>
+                        Math.min(current + 1, searchResults.length - 1)
+                      );
+                    }
+
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setActiveSearchIndex((current) =>
+                        Math.max(current - 1, 0)
+                      );
+                    }
+
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      const selectedProduct =
+                        searchResults[activeSearchIndex];
+
+                      if (selectedProduct) {
+                        openProductDetails(selectedProduct);
+                        setSearchFocused(false);
+                        setSearch("");
+                      }
+                    }
+
+                    if (event.key === "Escape") {
+                      setSearchFocused(false);
+                    }
+                  }}
+                  placeholder="Search products..."
+                  aria-label="Search products"
+                  aria-expanded={searchFocused && search.trim().length > 0}
+                  className="w-full rounded-2xl border border-[#dfe7df] bg-white py-3 pl-10 pr-3 text-base shadow-sm outline-none transition focus:border-[#075b3b] focus:ring-2 focus:ring-[#075b3b]/10"
+                />
+              </div>
+
+              {searchFocused && search.trim().length > 0 && (
+                <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-[#e6ece6] bg-white shadow-xl shadow-[#0a3a2d]/5">
+                  {searchResults.length > 0 ? (
+                    <div className="max-h-80 overflow-y-auto p-2">
+                      {searchResults.map((product, index) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            openProductDetails(product);
+                            setSearchFocused(false);
+                            setSearch("");
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                            activeSearchIndex === index
+                              ? "bg-[#edf5eb]"
+                              : "hover:bg-[#f7f9f6]"
+                          }`}
+                        >
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f5f7f2]">
+                            {product.image_urls.length > 0 ? (
+                              <img
+                                src={product.image_urls[0]}
+                                alt={product.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-lg">🛍️</span>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold text-[#17251d]">
+                              {product.name}
+                            </p>
+                            <p className="mt-0.5 text-sm font-medium text-[#075b3b]">
+                              {money(product.price)}
+                            </p>
+                          </div>
+
+                          <div className="shrink-0 text-right text-[11px] font-medium text-gray-500">
+                            {product.stock_quantity > 0
+                              ? `${product.stock_quantity} available`
+                              : "Out of stock"}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-5 text-sm text-gray-500">
+                      No products found
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </header>
 
+      {/* Hero section */}
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
           <div>
@@ -935,11 +1109,12 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Store benefits */}
       <section className="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-5 py-6 md:grid-cols-4">
         {[
           ["🛡️", "Customer Care"],
           ["🚚", "Delivery Options"],
-          ["��️", "Great Prices"],
+          ["🏷️", "Great Prices"],
           ["💬", "WhatsApp Orders"],
         ].map(([emoji, label]) => (
           <div
@@ -952,6 +1127,7 @@ export default function Home() {
         ))}
       </section>
 
+      {/* Product listing */}
       <section id="products" className="mx-auto max-w-7xl px-5 pb-20">
         <h2 className="text-3xl font-black text-[#075b3b]">
           Featured Products
@@ -1087,13 +1263,14 @@ export default function Home() {
 
             {visibleProducts.length === 0 && (
               <p className="col-span-full rounded-xl bg-white p-8 text-center text-gray-500">
-                No products found. Try another search.
+                No products found.
               </p>
             )}
           </div>
         )}
       </section>
 
+      {/* Footer */}
       <footer className="bg-[#102f22] px-5 py-9 text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-6">
           <div>
@@ -1124,6 +1301,7 @@ export default function Home() {
         </div>
       </footer>
 
+      {/* Product details and media gallery */}
       {selectedProduct && (
         <div
           className="fixed inset-0 z-40 overflow-y-auto bg-black/60 p-3 sm:p-6"
@@ -1152,6 +1330,7 @@ export default function Home() {
             </div>
 
             <div className="grid gap-7 md:grid-cols-2">
+              {/* Images and video */}
               <div className="min-w-0">
                 <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#edf5eb] to-[#fff5d9] sm:min-h-96">
                   {selectedProduct.image_urls.length > 0 ? (
@@ -1219,6 +1398,7 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Product information */}
               <div className="flex flex-col">
                 <p className="text-sm font-bold uppercase tracking-wider text-[#08784b]">
                   {selectedProduct.category}
@@ -1348,6 +1528,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* Cart and checkout panel */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
           <button
@@ -1665,6 +1846,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* Customer account */}
       {accountOpen && (
         <div className="fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/50 p-4">
           <button
@@ -1882,19 +2064,32 @@ export default function Home() {
                 <form
                   onSubmit={
                     authMode === "login"
-                      ? signInWithUsername
-                      : signUpWithUsername
+                      ? signInWithEmail
+                      : signUpWithEmail
                   }
                   className="mt-5 space-y-4"
                 >
+                  {authMode === "signup" && (
+                    <label className="block text-sm font-semibold">
+                      Full name
+                      <input
+                        required
+                        value={authName}
+                        onChange={(e) => setAuthName(e.target.value)}
+                        autoComplete="name"
+                        className="mt-1 w-full rounded-lg border p-3 font-normal"
+                      />
+                    </label>
+                  )}
+
                   <label className="block text-sm font-semibold">
-                    Username
+                    Email address
                     <input
                       required
-                      value={authUsername}
-                      onChange={(e) => setAuthUsername(e.target.value)}
-                      autoComplete="username"
-                      placeholder="yourname"
+                      type="email"
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      autoComplete="email"
                       className="mt-1 w-full rounded-lg border p-3 font-normal"
                     />
                   </label>
@@ -1928,6 +2123,21 @@ export default function Home() {
                         : "Create Account"}
                   </button>
                 </form>
+
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-gray-200" />
+                  <span className="text-xs text-gray-500">OR</span>
+                  <div className="h-px flex-1 bg-gray-200" />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void signInWithGoogle()}
+                  disabled={authBusy}
+                  className="w-full rounded-lg border border-gray-300 p-3 font-bold disabled:opacity-50"
+                >
+                  Continue with Google
+                </button>
 
                 {authMessage && (
                   <p
