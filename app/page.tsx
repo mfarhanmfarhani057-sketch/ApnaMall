@@ -806,7 +806,7 @@ export default function Home() {
         ),
         "",
         `Subtotal: ${money(savedSubtotal)}`,
-        `Shipping: ${money(shippingFee)}`,
+        "Delivery Charges: To be confirmed (delivery charges may apply depending on your location)",
         `ORDER TOTAL: ${money(savedTotal)}`,
         "",
         "My order has been saved. Please confirm delivery details and payment instructions.",
