@@ -8,6 +8,10 @@ import {
   type FormEvent,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  buildCustomerAuthEmail,
+  normalizeCustomerUsername,
+} from "@/lib/customer-auth";
 import type { User } from "@supabase/supabase-js";
 
 type CategoryRow = {
@@ -65,8 +69,7 @@ type OrderRow = {
 const whatsappNumber = "923291311746";
 const CART_STORAGE_KEY = "Kamalia-Cart-cart-v1";
 
-const money = (amount: number) =>
-  `Rs ${amount.toLocaleString("en-PK")}`;
+const money = (amount: number) => `Rs ${amount.toLocaleString("en-PK")}`;
 
 function getProductImages(
   value: unknown,
@@ -85,8 +88,7 @@ function getProductImages(
   const images = Array.isArray(urls)
     ? urls.filter(
         (url): url is string =>
-          typeof url === "string" &&
-          /^https?:\/\//i.test(url)
+          typeof url === "string" && /^https?:\/\//i.test(url)
       )
     : [];
 
@@ -132,18 +134,15 @@ export default function Home() {
 
   const [whatsappOrderUrl, setWhatsappOrderUrl] = useState("");
   const [lastOrderNumber, setLastOrderNumber] = useState("");
-  const [lastOrderTotal, setLastOrderTotal] =
-    useState<number | null>(null);
+  const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null);
 
   // Customer authentication.
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [authMode, setAuthMode] =
-    useState<"login" | "signup">("login");
-  const [authEmail, setAuthEmail] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [authName, setAuthName] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
 
@@ -191,7 +190,6 @@ export default function Home() {
     }
   }, []);
 
-  // Save cart changes after restoring the saved cart.
   useEffect(() => {
     if (!cartLoaded) return;
 
@@ -202,7 +200,6 @@ export default function Home() {
     }
   }, [cart, cartLoaded]);
 
-  // Load products, categories, images, and video URLs.
   useEffect(() => {
     let cancelled = false;
 
@@ -229,11 +226,8 @@ export default function Home() {
         if (categoryResult.error) throw categoryResult.error;
         if (productResult.error) throw productResult.error;
 
-        const categoryRows =
-          (categoryResult.data ?? []) as CategoryRow[];
-
-        const productRows =
-          (productResult.data ?? []) as ProductRow[];
+        const categoryRows = (categoryResult.data ?? []) as CategoryRow[];
+        const productRows = (productResult.data ?? []) as ProductRow[];
 
         const categoryNames = new Map(
           categoryRows.map((item) => [item.id, item.name])
@@ -256,13 +250,8 @@ export default function Home() {
         if (cancelled) return;
 
         setProducts(loadedProducts);
-        setCategories([
-          "All",
-          ...categoryRows.map((item) => item.name),
-        ]);
+        setCategories(["All", ...categoryRows.map((item) => item.name)]);
 
-        // Remove unavailable products from the saved cart and
-        // clamp quantities to the available stock.
         setCart((old) => {
           const next: Record<number, number> = {};
 
@@ -301,7 +290,6 @@ export default function Home() {
     };
   }, []);
 
-  // Restore authentication and listen for login/logout events.
   useEffect(() => {
     let mounted = true;
 
@@ -317,8 +305,6 @@ export default function Home() {
       const currentUser = data.session?.user ?? null;
 
       setUser(currentUser);
-      setAuthEmail(currentUser?.email ?? "");
-      setEmail((old) => old || currentUser?.email || "");
       setAuthLoading(false);
     }
 
@@ -330,7 +316,6 @@ export default function Home() {
       const currentUser = session?.user ?? null;
 
       setUser(currentUser);
-      setAuthEmail(currentUser?.email ?? "");
       setAuthPassword("");
       setAuthMessage("");
       setEmail((old) => old || currentUser?.email || "");
@@ -365,7 +350,6 @@ export default function Home() {
     [products, cart]
   );
 
-  // Determine which items are being purchased.
   const checkoutItems = useMemo(() => {
     if (buyNowItem) {
       const product = products.find(
@@ -374,24 +358,16 @@ export default function Home() {
 
       if (!product || product.stock_quantity <= 0) return [];
 
-      return [
-        {
-          ...product,
-          quantity: Math.min(
-            buyNowItem.quantity,
-            product.stock_quantity
-          ),
-        },
-      ];
+      return [{
+        ...product,
+        quantity: Math.min(buyNowItem.quantity, product.stock_quantity),
+      }];
     }
 
     return cartItems;
   }, [buyNowItem, products, cartItems]);
 
-  const count = cartItems.reduce(
-    (sum, p) => sum + p.quantity,
-    0
-  );
+  const count = cartItems.reduce((sum, p) => sum + p.quantity, 0);
 
   const total = checkoutItems.reduce(
     (sum, p) => sum + p.price * p.quantity,
@@ -464,7 +440,6 @@ export default function Home() {
 
     clearOrderSuccess();
 
-    // This does not add anything to the saved cart.
     setBuyNowItem({
       productId: product.id,
       quantity: Math.min(quantity, product.stock_quantity),
@@ -551,14 +526,16 @@ export default function Home() {
     if (error) throw error;
   }
 
-  async function signInWithEmail(e: FormEvent<HTMLFormElement>) {
+  async function signInWithUsername(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAuthBusy(true);
     setAuthMessage("");
 
     try {
+      const username = normalizeCustomerUsername(authUsername);
+      const email = buildCustomerAuthEmail(username);
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: authEmail.trim(),
+        email,
         password: authPassword,
       });
 
@@ -577,73 +554,68 @@ export default function Home() {
     }
   }
 
-  async function signUpWithEmail(e: FormEvent<HTMLFormElement>) {
+  async function signUpWithUsername(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAuthBusy(true);
     setAuthMessage("");
 
     try {
+      const username = normalizeCustomerUsername(authUsername);
+      const usernameKey = username.toLowerCase();
+      const email = buildCustomerAuthEmail(username);
+
+      const { data: existingProfile, error: existingProfileError } =
+        await supabase
+          .from("customer_profiles")
+          .select("id")
+          .eq("username_key", usernameKey)
+          .limit(1);
+
+      if (existingProfileError) throw existingProfileError;
+
+      if ((existingProfile ?? []).length > 0) {
+        throw new Error("This username is already taken. Please choose another one.");
+      }
+
       const { data, error } = await supabase.auth.signUp({
-        email: authEmail.trim(),
+        email,
         password: authPassword,
         options: {
           data: {
-            full_name: authName.trim(),
+            customer_username: username,
           },
         },
       });
 
       if (error) throw error;
 
-      if (data.user && data.session) {
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from("customer_profiles")
+          .upsert(
+            {
+              user_id: data.user.id,
+              username,
+              username_key: usernameKey,
+              full_name: null,
+              email: data.user.email ?? email,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+
+        if (profileError) throw profileError;
+
         setUser(data.user);
-
-        await saveProfile(
-          data.user,
-          authName,
-          data.user.email ?? authEmail,
-          "",
-          "",
-          ""
-        );
-
-        setAuthMessage("Your account has been created.");
+        setAuthMessage("Your account was created. You can sign in with your username and password.");
       } else {
-        setAuthMessage(
-          "Account created. Check your email for the confirmation link."
-        );
+        setAuthMessage("Account created. Check your email confirmation settings in Supabase to continue.");
       }
     } catch (error) {
       setAuthMessage(
-        error instanceof Error
-          ? error.message
-          : "Account creation failed."
+        error instanceof Error ? error.message : "Account creation failed."
       );
     } finally {
-      setAuthBusy(false);
-    }
-  }
-
-  async function signInWithGoogle() {
-    setAuthBusy(true);
-    setAuthMessage("");
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (error) throw error;
-    } catch (error) {
-      setAuthMessage(
-        error instanceof Error
-          ? error.message
-          : "Google sign-in could not start."
-      );
-
       setAuthBusy(false);
     }
   }
@@ -826,8 +798,6 @@ export default function Home() {
       setLastOrderTotal(savedTotal);
       setWhatsappOrderUrl(whatsappUrl);
 
-      // A normal cart order clears the cart.
-      // Buy Now leaves the saved cart untouched.
       if (!buyNowItem) {
         setCart({});
       }
@@ -866,7 +836,6 @@ export default function Home() {
         Kamalia Cart Pakistan · Quality Products · Great Prices
       </div>
 
-      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-2">
@@ -928,7 +897,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero section */}
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
           <div>
@@ -967,12 +935,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Store benefits */}
       <section className="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-5 py-6 md:grid-cols-4">
         {[
           ["🛡️", "Customer Care"],
           ["🚚", "Delivery Options"],
-          ["🏷️", "Great Prices"],
+          ["��️", "Great Prices"],
           ["💬", "WhatsApp Orders"],
         ].map(([emoji, label]) => (
           <div
@@ -985,7 +952,6 @@ export default function Home() {
         ))}
       </section>
 
-      {/* Product listing */}
       <section id="products" className="mx-auto max-w-7xl px-5 pb-20">
         <h2 className="text-3xl font-black text-[#075b3b]">
           Featured Products
@@ -1128,7 +1094,6 @@ export default function Home() {
         )}
       </section>
 
-      {/* Footer */}
       <footer className="bg-[#102f22] px-5 py-9 text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-6">
           <div>
@@ -1159,7 +1124,6 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Product details and media gallery */}
       {selectedProduct && (
         <div
           className="fixed inset-0 z-40 overflow-y-auto bg-black/60 p-3 sm:p-6"
@@ -1188,7 +1152,6 @@ export default function Home() {
             </div>
 
             <div className="grid gap-7 md:grid-cols-2">
-              {/* Images and video */}
               <div className="min-w-0">
                 <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#edf5eb] to-[#fff5d9] sm:min-h-96">
                   {selectedProduct.image_urls.length > 0 ? (
@@ -1256,7 +1219,6 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Product information */}
               <div className="flex flex-col">
                 <p className="text-sm font-bold uppercase tracking-wider text-[#08784b]">
                   {selectedProduct.category}
@@ -1386,7 +1348,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Cart and checkout panel */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
           <button
@@ -1704,7 +1665,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Customer account */}
       {accountOpen && (
         <div className="fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/50 p-4">
           <button
@@ -1922,32 +1882,19 @@ export default function Home() {
                 <form
                   onSubmit={
                     authMode === "login"
-                      ? signInWithEmail
-                      : signUpWithEmail
+                      ? signInWithUsername
+                      : signUpWithUsername
                   }
                   className="mt-5 space-y-4"
                 >
-                  {authMode === "signup" && (
-                    <label className="block text-sm font-semibold">
-                      Full name
-                      <input
-                        required
-                        value={authName}
-                        onChange={(e) => setAuthName(e.target.value)}
-                        autoComplete="name"
-                        className="mt-1 w-full rounded-lg border p-3 font-normal"
-                      />
-                    </label>
-                  )}
-
                   <label className="block text-sm font-semibold">
-                    Email address
+                    Username
                     <input
                       required
-                      type="email"
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      autoComplete="email"
+                      value={authUsername}
+                      onChange={(e) => setAuthUsername(e.target.value)}
+                      autoComplete="username"
+                      placeholder="yourname"
                       className="mt-1 w-full rounded-lg border p-3 font-normal"
                     />
                   </label>
@@ -1981,21 +1928,6 @@ export default function Home() {
                         : "Create Account"}
                   </button>
                 </form>
-
-                <div className="my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-gray-200" />
-                  <span className="text-xs text-gray-500">OR</span>
-                  <div className="h-px flex-1 bg-gray-200" />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void signInWithGoogle()}
-                  disabled={authBusy}
-                  className="w-full rounded-lg border border-gray-300 p-3 font-bold disabled:opacity-50"
-                >
-                  Continue with Google
-                </button>
 
                 {authMessage && (
                   <p
