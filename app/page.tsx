@@ -1144,7 +1144,7 @@ export default function Home() {
               WhatsApp: +92 329 1311746
             </p>
             <p className="text-sm text-gray-300">
-              kamaliacart6260@gmail.com
+              kamaliacart@gmail.com
             </p>
 
             <a
