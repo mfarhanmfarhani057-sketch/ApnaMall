@@ -114,13 +114,11 @@ export default function Home() {
   const [cartLoaded, setCartLoaded] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
 
-  // Product details and gallery.
   const [selectedProduct, setSelectedProduct] =
     useState<Product | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [detailQuantity, setDetailQuantity] = useState(1);
 
-  // Buy Now checks out only the selected product.
   const [buyNowItem, setBuyNowItem] = useState<{
     productId: number;
     quantity: number;
@@ -138,7 +136,6 @@ export default function Home() {
   const [lastOrderTotal, setLastOrderTotal] =
     useState<number | null>(null);
 
-  // Customer authentication.
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -197,7 +194,6 @@ export default function Home() {
     };
   }, []);
 
-  // Restore the cart from this browser.
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CART_STORAGE_KEY);
@@ -236,7 +232,6 @@ export default function Home() {
     }
   }, []);
 
-  // Save cart changes after restoring the saved cart.
   useEffect(() => {
     if (!cartLoaded) return;
 
@@ -247,7 +242,6 @@ export default function Home() {
     }
   }, [cart, cartLoaded]);
 
-  // Load products, categories, images, and video URLs.
   useEffect(() => {
     let cancelled = false;
 
@@ -274,11 +268,8 @@ export default function Home() {
         if (categoryResult.error) throw categoryResult.error;
         if (productResult.error) throw productResult.error;
 
-        const categoryRows =
-          (categoryResult.data ?? []) as CategoryRow[];
-
-        const productRows =
-          (productResult.data ?? []) as ProductRow[];
+        const categoryRows = (categoryResult.data ?? []) as CategoryRow[];
+        const productRows = (productResult.data ?? []) as ProductRow[];
 
         const categoryNames = new Map(
           categoryRows.map((item) => [item.id, item.name])
@@ -301,13 +292,8 @@ export default function Home() {
         if (cancelled) return;
 
         setProducts(loadedProducts);
-        setCategories([
-          "All",
-          ...categoryRows.map((item) => item.name),
-        ]);
+        setCategories(["All", ...categoryRows.map((item) => item.name)]);
 
-        // Remove unavailable products from the saved cart and
-        // clamp quantities to the available stock.
         setCart((old) => {
           const next: Record<number, number> = {};
 
@@ -346,7 +332,6 @@ export default function Home() {
     };
   }, []);
 
-  // Restore authentication and listen for login/logout events.
   useEffect(() => {
     let mounted = true;
 
@@ -410,7 +395,6 @@ export default function Home() {
     [products, cart]
   );
 
-  // Determine which items are being purchased.
   const checkoutItems = useMemo(() => {
     if (buyNowItem) {
       const product = products.find(
@@ -422,10 +406,7 @@ export default function Home() {
       return [
         {
           ...product,
-          quantity: Math.min(
-            buyNowItem.quantity,
-            product.stock_quantity
-          ),
+          quantity: Math.min(buyNowItem.quantity, product.stock_quantity),
         },
       ];
     }
@@ -433,10 +414,7 @@ export default function Home() {
     return cartItems;
   }, [buyNowItem, products, cartItems]);
 
-  const count = cartItems.reduce(
-    (sum, p) => sum + p.quantity,
-    0
-  );
+  const count = cartItems.reduce((sum, p) => sum + p.quantity, 0);
 
   const total = checkoutItems.reduce(
     (sum, p) => sum + p.price * p.quantity,
@@ -509,7 +487,6 @@ export default function Home() {
 
     clearOrderSuccess();
 
-    // This does not add anything to the saved cart.
     setBuyNowItem({
       productId: product.id,
       quantity: Math.min(quantity, product.stock_quantity),
@@ -669,30 +646,6 @@ export default function Home() {
     }
   }
 
-  async function signInWithGoogle() {
-    setAuthBusy(true);
-    setAuthMessage("");
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (error) throw error;
-    } catch (error) {
-      setAuthMessage(
-        error instanceof Error
-          ? error.message
-          : "Google sign-in could not start."
-      );
-
-      setAuthBusy(false);
-    }
-  }
-
   async function signOut() {
     const { error } = await supabase.auth.signOut();
 
@@ -760,10 +713,7 @@ export default function Home() {
     }
 
     for (const item of checkoutItems) {
-      if (
-        item.quantity <= 0 ||
-        item.quantity > item.stock_quantity
-      ) {
+      if (item.quantity <= 0 || item.quantity > item.stock_quantity) {
         alert(`${item.name} does not have enough stock.`);
         return;
       }
@@ -807,11 +757,7 @@ export default function Home() {
 
       const result = (await response.json()) as CheckoutResponse;
 
-      if (
-        !response.ok ||
-        result.success !== true ||
-        !result.order_number
-      ) {
+      if (!response.ok || result.success !== true || !result.order_number) {
         alert(
           result.error ||
             "We couldn't save your order. Please check your cart and try again."
@@ -820,19 +766,13 @@ export default function Home() {
       }
 
       const savedSubtotal =
-        result.subtotal !== undefined
-          ? Number(result.subtotal)
-          : total;
+        result.subtotal !== undefined ? Number(result.subtotal) : total;
 
       const shippingFee =
-        result.shipping_fee !== undefined
-          ? Number(result.shipping_fee)
-          : 0;
+        result.shipping_fee !== undefined ? Number(result.shipping_fee) : 0;
 
       const savedTotal =
-        result.total !== undefined
-          ? Number(result.total)
-          : savedSubtotal + shippingFee;
+        result.total !== undefined ? Number(result.total) : savedSubtotal + shippingFee;
 
       const message = [
         "Kamalia Cart PAKISTAN — ORDER",
@@ -871,8 +811,6 @@ export default function Home() {
       setLastOrderTotal(savedTotal);
       setWhatsappOrderUrl(whatsappUrl);
 
-      // A normal cart order clears the cart.
-      // Buy Now leaves the saved cart untouched.
       if (!buyNowItem) {
         setCart({});
       }
@@ -911,7 +849,6 @@ export default function Home() {
         Kamalia Cart Pakistan · Quality Products · Great Prices
       </div>
 
-      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-2">
@@ -926,21 +863,6 @@ export default function Home() {
             </a>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAccountOpen(true);
-                  setAuthMessage("");
-                }}
-                className="rounded-lg border border-[#075b3b] px-2 py-2 text-xs font-bold text-[#075b3b] sm:px-4 sm:py-3 sm:text-sm"
-              >
-                {authLoading
-                  ? "Account..."
-                  : user
-                    ? "My Account"
-                    : "Login"}
-              </button>
-
               <button
                 type="button"
                 onClick={() => {
@@ -988,8 +910,7 @@ export default function Home() {
 
                     if (event.key === "Enter") {
                       event.preventDefault();
-                      const selectedProduct =
-                        searchResults[activeSearchIndex];
+                      const selectedProduct = searchResults[activeSearchIndex];
 
                       if (selectedProduct) {
                         openProductDetails(selectedProduct);
@@ -1070,7 +991,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero section */}
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
           <div>
@@ -1081,15 +1001,13 @@ export default function Home() {
             <h1 className="mt-3 text-5xl font-black leading-tight text-[#075b3b] md:text-6xl">
               Better Products.
               <br />
-              <span className="text-[#e6a000]">
-                Brighter Living.
-              </span>
+              <span className="text-[#e6a000]">Brighter Living.</span>
             </h1>
 
             <p className="mt-5 max-w-xl leading-7 text-gray-700">
-              Shop useful gadgets, fashion accessories, and home
-              essentials. Browse detailed product information, save
-              your cart, and place your order through WhatsApp.
+              Shop useful gadgets, fashion accessories, and home essentials.
+              Browse detailed product information, save your cart, and place
+              your order through WhatsApp.
             </p>
 
             <a
@@ -1109,7 +1027,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Store benefits */}
       <section className="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-5 py-6 md:grid-cols-4">
         {[
           ["🛡️", "Customer Care"],
@@ -1127,15 +1044,12 @@ export default function Home() {
         ))}
       </section>
 
-      {/* Product listing */}
       <section id="products" className="mx-auto max-w-7xl px-5 pb-20">
-        <h2 className="text-3xl font-black text-[#075b3b]">
-          Featured Products
-        </h2>
+        <h2 className="text-3xl font-black text-[#075b3b]">Featured Products</h2>
 
         <p className="mt-2 text-gray-600">
-          Explore our products and open any item to see its details,
-          pictures, and video.
+          Explore our products and open any item to see its details, pictures,
+          and video.
         </p>
 
         <div className="my-6 flex flex-wrap gap-2">
@@ -1270,14 +1184,11 @@ export default function Home() {
         )}
       </section>
 
-      {/* Footer */}
       <footer className="bg-[#102f22] px-5 py-9 text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-6">
           <div>
             <h2 className="text-xl font-black">Kamalia Cart Pakistan</h2>
-            <p className="mt-2 text-sm text-gray-300">
-              Shop smart. Shop local.
-            </p>
+            <p className="mt-2 text-sm text-gray-300">Shop smart. Shop local.</p>
           </div>
 
           <div>
@@ -1285,9 +1196,7 @@ export default function Home() {
             <p className="mt-2 text-sm text-gray-300">
               WhatsApp: +92 329 1311746
             </p>
-            <p className="text-sm text-gray-300">
-              kamaliacart@gmail.com
-            </p>
+            <p className="text-sm text-gray-300">kamaliacart@gmail.com</p>
 
             <a
               href={`https://wa.me/${whatsappNumber}`}
@@ -1301,7 +1210,6 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Product details and media gallery */}
       {selectedProduct && (
         <div
           className="fixed inset-0 z-40 overflow-y-auto bg-black/60 p-3 sm:p-6"
@@ -1315,9 +1223,7 @@ export default function Home() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between gap-3">
-              <p className="font-bold text-[#075b3b]">
-                Product Details
-              </p>
+              <p className="font-bold text-[#075b3b]">Product Details</p>
 
               <button
                 type="button"
@@ -1330,7 +1236,6 @@ export default function Home() {
             </div>
 
             <div className="grid gap-7 md:grid-cols-2">
-              {/* Images and video */}
               <div className="min-w-0">
                 <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#edf5eb] to-[#fff5d9] sm:min-h-96">
                   {selectedProduct.image_urls.length > 0 ? (
@@ -1347,9 +1252,7 @@ export default function Home() {
                       className="max-h-[480px] w-full object-contain"
                     />
                   ) : (
-                    <span className="text-8xl">
-                      {selectedProduct.emoji}
-                    </span>
+                    <span className="text-8xl">{selectedProduct.emoji}</span>
                   )}
                 </div>
 
@@ -1398,7 +1301,6 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Product information */}
               <div className="flex flex-col">
                 <p className="text-sm font-bold uppercase tracking-wider text-[#08784b]">
                   {selectedProduct.category}
@@ -1408,9 +1310,7 @@ export default function Home() {
                   {selectedProduct.name}
                 </h2>
 
-                <p className="mt-4 text-3xl font-black">
-                  {money(selectedProduct.price)}
-                </p>
+                <p className="mt-4 text-3xl font-black">{money(selectedProduct.price)}</p>
 
                 <p
                   className={`mt-3 text-sm font-semibold ${
@@ -1434,39 +1334,28 @@ export default function Home() {
                 </p>
 
                 <div className="mt-6">
-                  <label className="block text-sm font-bold">
-                    Quantity
-                  </label>
+                  <label className="block text-sm font-bold">Quantity</label>
 
                   <div className="mt-2 flex items-center gap-4">
                     <button
                       type="button"
-                      onClick={() =>
-                        setDetailQuantity((q) => Math.max(1, q - 1))
-                      }
+                      onClick={() => setDetailQuantity((q) => Math.max(1, q - 1))}
                       disabled={detailQuantity <= 1}
                       className="h-10 w-10 rounded-lg border font-bold disabled:opacity-40"
                     >
                       −
                     </button>
 
-                    <span className="min-w-6 text-center font-bold">
-                      {detailQuantity}
-                    </span>
+                    <span className="min-w-6 text-center font-bold">{detailQuantity}</span>
 
                     <button
                       type="button"
                       onClick={() =>
                         setDetailQuantity((q) =>
-                          Math.min(
-                            selectedProduct.stock_quantity,
-                            q + 1
-                          )
+                          Math.min(selectedProduct.stock_quantity, q + 1)
                         )
                       }
-                      disabled={
-                        detailQuantity >= selectedProduct.stock_quantity
-                      }
+                      disabled={detailQuantity >= selectedProduct.stock_quantity}
                       className="h-10 w-10 rounded-lg border font-bold disabled:opacity-40"
                     >
                       +
@@ -1477,9 +1366,7 @@ export default function Home() {
                 <div className="mt-5 flex items-center justify-between gap-3 rounded-xl bg-[#f7f8f4] p-4">
                   <span className="font-semibold">Total</span>
                   <span className="text-xl font-black text-[#075b3b]">
-                    {money(
-                      selectedProduct.price * detailQuantity
-                    )}
+                    {money(selectedProduct.price * detailQuantity)}
                   </span>
                 </div>
 
@@ -1519,8 +1406,8 @@ export default function Home() {
                 </div>
 
                 <p className="mt-4 text-xs leading-5 text-gray-500">
-                  Orders are processed through the existing Kamalia Cart
-                  checkout and WhatsApp process.
+                  Orders are processed through the existing Kamalia Cart checkout
+                  and WhatsApp process.
                 </p>
               </div>
             </div>
@@ -1528,7 +1415,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Cart and checkout panel */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
           <button
@@ -1558,8 +1444,8 @@ export default function Home() {
 
             {buyNowItem && (
               <div className="mt-4 rounded-lg bg-[#fff5d9] p-3 text-sm">
-                You are buying only the selected product. Your other cart
-                items will remain saved.
+                You are buying only the selected product. Your other cart items
+                will remain saved.
 
                 <button
                   type="button"
@@ -1579,9 +1465,7 @@ export default function Home() {
 
             {checkoutItems.length === 0 ? (
               <p className="py-8 text-gray-500">
-                {buyNowItem
-                  ? "This product is unavailable."
-                  : "Your cart is empty."}
+                {buyNowItem ? "This product is unavailable." : "Your cart is empty."}
               </p>
             ) : (
               <div className="my-5 space-y-4">
@@ -1603,9 +1487,7 @@ export default function Home() {
                           </div>
 
                           <div className="min-w-0">
-                            <p className="break-words font-bold">
-                              {p.name}
-                            </p>
+                            <p className="break-words font-bold">{p.name}</p>
 
                             <p className="text-sm text-gray-500">
                               {money(p.price)} each
@@ -1627,10 +1509,7 @@ export default function Home() {
                                 old
                                   ? {
                                       ...old,
-                                      quantity: Math.max(
-                                        1,
-                                        old.quantity - 1
-                                      ),
+                                      quantity: Math.max(1, old.quantity - 1),
                                     }
                                   : null
                               );
@@ -1651,9 +1530,7 @@ export default function Home() {
                           onClick={() => {
                             if (buyNowItem) {
                               if (p.quantity >= p.stock_quantity) {
-                                alert(
-                                  "You have reached the available stock."
-                                );
+                                alert("You have reached the available stock.");
                                 return;
                               }
 
@@ -1706,9 +1583,7 @@ export default function Home() {
 
               <span>
                 {money(
-                  whatsappOrderUrl && lastOrderTotal !== null
-                    ? lastOrderTotal
-                    : total
+                  whatsappOrderUrl && lastOrderTotal !== null ? lastOrderTotal : total
                 )}
               </span>
             </div>
@@ -1727,8 +1602,7 @@ export default function Home() {
                   </p>
 
                   <p className="mt-2 text-sm text-gray-600">
-                    Tap below to open WhatsApp and send your order to
-                    Kamalia Cart.
+                    Tap below to open WhatsApp and send your order to Kamalia Cart.
                   </p>
                 </div>
 
@@ -1838,324 +1712,11 @@ export default function Home() {
             )}
 
             <p className="mt-4 text-xs leading-5 text-gray-500">
-              Your order is saved before WhatsApp opens. You must press
-              Send in WhatsApp to contact the store. Buy Now orders contain
-              only the selected product. Your other cart items stay saved.
+              Your order is saved before WhatsApp opens. You must press Send in
+              WhatsApp to contact the store. Buy Now orders contain only the
+              selected product. Your other cart items stay saved.
             </p>
           </aside>
-        </div>
-      )}
-
-      {/* Customer account */}
-      {accountOpen && (
-        <div className="fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/50 p-4">
-          <button
-            type="button"
-            aria-label="Close account panel"
-            className="fixed inset-0 cursor-default"
-            onClick={() => setAccountOpen(false)}
-          />
-
-          <section className="relative my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-2xl font-black text-[#075b3b]">
-                {user ? "My Account" : "Welcome to Kamalia Cart"}
-              </h2>
-
-              <button
-                type="button"
-                onClick={() => setAccountOpen(false)}
-                className="rounded-lg bg-gray-100 px-3 py-2"
-              >
-                ✕
-              </button>
-            </div>
-
-            {authLoading ? (
-              <p className="py-8 text-gray-500">
-                Checking your account...
-              </p>
-            ) : user ? (
-              <div className="mt-5 space-y-5">
-                <div className="rounded-xl bg-[#edf5eb] p-4">
-                  <p className="text-sm text-gray-600">Signed in as</p>
-                  <p className="break-all font-bold">
-                    {user.email || "Email not available"}
-                  </p>
-                </div>
-
-                <form onSubmit={updateProfile} className="space-y-3">
-                  <h3 className="font-bold text-[#075b3b]">
-                    Your delivery profile
-                  </h3>
-
-                  <label className="block text-sm font-semibold">
-                    Full name
-                    <input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="mt-1 w-full rounded-lg border p-3 font-normal"
-                    />
-                  </label>
-
-                  <label className="block text-sm font-semibold">
-                    Email
-                    <input
-                      type="email"
-                      value={email || user.email || ""}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="mt-1 w-full rounded-lg border p-3 font-normal"
-                    />
-                  </label>
-
-                  <label className="block text-sm font-semibold">
-                    Mobile number
-                    <input
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="mt-1 w-full rounded-lg border p-3 font-normal"
-                    />
-                  </label>
-
-                  <label className="block text-sm font-semibold">
-                    City
-                    <input
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      className="mt-1 w-full rounded-lg border p-3 font-normal"
-                    />
-                  </label>
-
-                  <label className="block text-sm font-semibold">
-                    Delivery address
-                    <textarea
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      rows={2}
-                      className="mt-1 w-full rounded-lg border p-3 font-normal"
-                    />
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={profileBusy}
-                    className="w-full rounded-lg bg-[#075b3b] p-3 font-bold text-white disabled:opacity-50"
-                  >
-                    {profileBusy ? "Saving..." : "Save Profile"}
-                  </button>
-                </form>
-
-                <div className="border-t pt-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-bold text-[#075b3b]">
-                      My Orders
-                    </h3>
-
-                    <button
-                      type="button"
-                      onClick={() => void loadOrders()}
-                      className="text-sm font-semibold underline"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-
-                  {ordersLoading && (
-                    <p className="py-4 text-sm text-gray-500">
-                      Loading your orders...
-                    </p>
-                  )}
-
-                  {ordersError && (
-                    <p className="py-4 text-sm text-red-700">
-                      {ordersError}
-                    </p>
-                  )}
-
-                  {!ordersLoading &&
-                    !ordersError &&
-                    orders.length === 0 && (
-                      <p className="py-4 text-sm text-gray-500">
-                        No orders are linked to this account yet.
-                        Previous guest orders are not automatically linked.
-                      </p>
-                    )}
-
-                  {!ordersLoading && orders.length > 0 && (
-                    <div className="mt-3 space-y-3">
-                      {orders.map((order) => (
-                        <article
-                          key={order.id}
-                          className="rounded-xl border p-4"
-                        >
-                          <div className="flex flex-wrap justify-between gap-2">
-                            <p className="font-bold">
-                              {order.order_number}
-                            </p>
-
-                            <span className="rounded-full bg-[#edf5eb] px-3 py-1 text-xs font-bold">
-                              {order.status}
-                            </span>
-                          </div>
-
-                          <p className="mt-2 text-sm text-gray-500">
-                            {new Date(order.created_at).toLocaleString(
-                              "en-PK"
-                            )}
-                          </p>
-
-                          <div className="mt-3 flex justify-between gap-3">
-                            <span className="text-sm text-gray-600">
-                              Payment: {order.payment_status}
-                            </span>
-
-                            <span className="font-black text-[#075b3b]">
-                              {money(Number(order.total))}
-                            </span>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void signOut()}
-                  className="w-full rounded-lg border border-red-200 p-3 font-bold text-red-700"
-                >
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <div className="mt-5">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode("login");
-                      setAuthMessage("");
-                    }}
-                    className={`rounded-lg p-3 font-bold ${
-                      authMode === "login"
-                        ? "bg-[#075b3b] text-white"
-                        : "bg-gray-100"
-                    }`}
-                  >
-                    Login
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode("signup");
-                      setAuthMessage("");
-                    }}
-                    className={`rounded-lg p-3 font-bold ${
-                      authMode === "signup"
-                        ? "bg-[#075b3b] text-white"
-                        : "bg-gray-100"
-                    }`}
-                  >
-                    Create Account
-                  </button>
-                </div>
-
-                <form
-                  onSubmit={
-                    authMode === "login"
-                      ? signInWithEmail
-                      : signUpWithEmail
-                  }
-                  className="mt-5 space-y-4"
-                >
-                  {authMode === "signup" && (
-                    <label className="block text-sm font-semibold">
-                      Full name
-                      <input
-                        required
-                        value={authName}
-                        onChange={(e) => setAuthName(e.target.value)}
-                        autoComplete="name"
-                        className="mt-1 w-full rounded-lg border p-3 font-normal"
-                      />
-                    </label>
-                  )}
-
-                  <label className="block text-sm font-semibold">
-                    Email address
-                    <input
-                      required
-                      type="email"
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      autoComplete="email"
-                      className="mt-1 w-full rounded-lg border p-3 font-normal"
-                    />
-                  </label>
-
-                  <label className="block text-sm font-semibold">
-                    Password
-                    <input
-                      required
-                      type="password"
-                      minLength={6}
-                      value={authPassword}
-                      onChange={(e) => setAuthPassword(e.target.value)}
-                      autoComplete={
-                        authMode === "login"
-                          ? "current-password"
-                          : "new-password"
-                      }
-                      className="mt-1 w-full rounded-lg border p-3 font-normal"
-                    />
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={authBusy}
-                    className="w-full rounded-lg bg-[#075b3b] p-3 font-bold text-white disabled:opacity-50"
-                  >
-                    {authBusy
-                      ? "Please wait..."
-                      : authMode === "login"
-                        ? "Login"
-                        : "Create Account"}
-                  </button>
-                </form>
-
-                <div className="my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-gray-200" />
-                  <span className="text-xs text-gray-500">OR</span>
-                  <div className="h-px flex-1 bg-gray-200" />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void signInWithGoogle()}
-                  disabled={authBusy}
-                  className="w-full rounded-lg border border-gray-300 p-3 font-bold disabled:opacity-50"
-                >
-                  Continue with Google
-                </button>
-
-                {authMessage && (
-                  <p
-                    role="status"
-                    className="mt-4 rounded-lg bg-[#f7f8f4] p-3 text-sm"
-                  >
-                    {authMessage}
-                  </p>
-                )}
-
-                <p className="mt-4 text-xs leading-5 text-gray-500">
-                  You can place orders without creating an account.
-                  Guest orders are saved but do not appear in account
-                  order history.
-                </p>
-              </div>
-            )}
-          </section>
         </div>
       )}
     </main>
