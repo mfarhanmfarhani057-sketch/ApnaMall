@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
@@ -17,6 +23,8 @@ type ProductRow = {
   price: number | string;
   stock_quantity: number;
   image_url: string | null;
+  image_urls: unknown;
+  video_url: string | null;
   category_id: number | null;
   is_active: boolean;
 };
@@ -29,6 +37,8 @@ type Product = {
   price: number;
   stock_quantity: number;
   image_url: string | null;
+  image_urls: string[];
+  video_url: string | null;
   category: string;
   emoji: string;
 };
@@ -58,6 +68,36 @@ const CART_STORAGE_KEY = "apna-mall-cart-v1";
 const money = (amount: number) =>
   `Rs ${amount.toLocaleString("en-PK")}`;
 
+function getProductImages(
+  value: unknown,
+  fallback: string | null
+): string[] {
+  let urls: unknown = value;
+
+  if (typeof urls === "string") {
+    try {
+      urls = JSON.parse(urls);
+    } catch {
+      urls = [];
+    }
+  }
+
+  const images = Array.isArray(urls)
+    ? urls.filter(
+        (url): url is string =>
+          typeof url === "string" &&
+          /^https?:\/\//i.test(url)
+      )
+    : [];
+
+  const allImages = [
+    ...(fallback ? [fallback] : []),
+    ...images,
+  ];
+
+  return [...new Set(allImages)];
+}
+
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>(["All"]);
@@ -71,8 +111,13 @@ export default function Home() {
   const [cartLoaded, setCartLoaded] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
 
-  // null means normal cart checkout.
-  // A value means Buy Now checkout for that product only.
+  // Product details and gallery.
+  const [selectedProduct, setSelectedProduct] =
+    useState<Product | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [detailQuantity, setDetailQuantity] = useState(1);
+
+  // Buy Now checks out only the selected product.
   const [buyNowItem, setBuyNowItem] = useState<{
     productId: number;
     quantity: number;
@@ -85,16 +130,17 @@ export default function Home() {
   const [address, setAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Show a real link after the order has been saved. This avoids
-  // relying on a temporary popup, which often fails on mobile browsers.
   const [whatsappOrderUrl, setWhatsappOrderUrl] = useState("");
   const [lastOrderNumber, setLastOrderNumber] = useState("");
-  const [lastOrderTotal, setLastOrderTotal] = useState<number | null>(null);
+  const [lastOrderTotal, setLastOrderTotal] =
+    useState<number | null>(null);
 
+  // Customer authentication.
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authMode, setAuthMode] =
+    useState<"login" | "signup">("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authName, setAuthName] = useState("");
@@ -123,14 +169,15 @@ export default function Home() {
 
           for (const [id, quantity] of Object.entries(parsed)) {
             const numericId = Number(id);
+            const numericQuantity = Number(quantity);
 
             if (
               Number.isSafeInteger(numericId) &&
               numericId > 0 &&
-              Number.isSafeInteger(quantity) &&
-              Number(quantity) > 0
+              Number.isSafeInteger(numericQuantity) &&
+              numericQuantity > 0
             ) {
-              cleaned[numericId] = Number(quantity);
+              cleaned[numericId] = numericQuantity;
             }
           }
 
@@ -144,7 +191,7 @@ export default function Home() {
     }
   }, []);
 
-  // Persist cart changes.
+  // Save cart changes after restoring the saved cart.
   useEffect(() => {
     if (!cartLoaded) return;
 
@@ -155,7 +202,7 @@ export default function Home() {
     }
   }, [cart, cartLoaded]);
 
-  // Load products and categories.
+  // Load products, categories, images, and video URLs.
   useEffect(() => {
     let cancelled = false;
 
@@ -173,7 +220,7 @@ export default function Home() {
           supabase
             .from("products")
             .select(
-              "id, name, slug, description, price, stock_quantity, image_url, category_id, is_active"
+              "id, name, slug, description, price, stock_quantity, image_url, image_urls, video_url, category_id, is_active"
             )
             .eq("is_active", true)
             .order("created_at", { ascending: false }),
@@ -200,6 +247,8 @@ export default function Home() {
           price: Number(p.price),
           stock_quantity: Number(p.stock_quantity),
           image_url: p.image_url,
+          image_urls: getProductImages(p.image_urls, p.image_url),
+          video_url: p.video_url,
           category: categoryNames.get(p.category_id ?? -1) ?? "Other",
           emoji: "🛍️",
         }));
@@ -212,7 +261,8 @@ export default function Home() {
           ...categoryRows.map((item) => item.name),
         ]);
 
-        // Remove products that are no longer available and clamp quantities.
+        // Remove unavailable products from the saved cart and
+        // clamp quantities to the available stock.
         setCart((old) => {
           const next: Record<number, number> = {};
 
@@ -251,7 +301,7 @@ export default function Home() {
     };
   }, []);
 
-  // Restore authentication session.
+  // Restore authentication and listen for login/logout events.
   useEffect(() => {
     let mounted = true;
 
@@ -264,7 +314,11 @@ export default function Home() {
         console.error("Could not read session:", error.message);
       }
 
-      setUser(data.session?.user ?? null);
+      const currentUser = data.session?.user ?? null;
+
+      setUser(currentUser);
+      setAuthEmail(currentUser?.email ?? "");
+      setEmail((old) => old || currentUser?.email || "");
       setAuthLoading(false);
     }
 
@@ -273,10 +327,13 @@ export default function Home() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setAuthEmail(session?.user?.email ?? "");
+      const currentUser = session?.user ?? null;
+
+      setUser(currentUser);
+      setAuthEmail(currentUser?.email ?? "");
       setAuthPassword("");
       setAuthMessage("");
+      setEmail((old) => old || currentUser?.email || "");
     });
 
     return () => {
@@ -297,7 +354,6 @@ export default function Home() {
     [products, search, category]
   );
 
-  // All items in the saved cart.
   const cartItems = useMemo(
     () =>
       products
@@ -309,7 +365,7 @@ export default function Home() {
     [products, cart]
   );
 
-  // Items that will actually be submitted to checkout.
+  // Determine which items are being purchased.
   const checkoutItems = useMemo(() => {
     if (buyNowItem) {
       const product = products.find(
@@ -342,58 +398,76 @@ export default function Home() {
     0
   );
 
+  function clearOrderSuccess() {
+    setWhatsappOrderUrl("");
+    setLastOrderNumber("");
+    setLastOrderTotal(null);
+  }
+
   function changeQuantity(id: number, amount: number) {
     const product = products.find((p) => p.id === id);
     if (!product) return;
 
+    const nextQuantity = (cart[id] || 0) + amount;
+
+    if (nextQuantity > product.stock_quantity) {
+      alert("The requested quantity exceeds available stock.");
+      return;
+    }
+
     setCart((old) => {
       const next = { ...old };
-      const newQuantity = (old[id] || 0) + amount;
 
-      if (newQuantity <= 0) {
+      if (nextQuantity <= 0) {
         delete next[id];
-      } else if (newQuantity <= product.stock_quantity) {
-        next[id] = newQuantity;
       } else {
-        alert("The requested quantity exceeds available stock.");
+        next[id] = nextQuantity;
       }
 
       return next;
     });
   }
 
-  function addToCart(product: Product) {
+  function addProductQuantity(product: Product, quantity: number) {
     if (product.stock_quantity <= 0) {
       alert("This product is out of stock.");
-      return;
+      return false;
     }
 
-    if ((cart[product.id] || 0) >= product.stock_quantity) {
-      alert("You have already added all available stock.");
-      return;
+    const currentQuantity = cart[product.id] || 0;
+
+    if (currentQuantity + quantity > product.stock_quantity) {
+      alert(
+        `Only ${product.stock_quantity} unit(s) of ${product.name} are available. You already have ${currentQuantity} in your cart.`
+      );
+      return false;
     }
 
     setCart((old) => ({
       ...old,
-      [product.id]: (old[product.id] || 0) + 1,
+      [product.id]: (old[product.id] || 0) + quantity,
     }));
+
+    clearOrderSuccess();
+    return true;
   }
 
-  function startBuyNow(product: Product) {
+  function addToCart(product: Product) {
+    addProductQuantity(product, 1);
+  }
+
+  function startBuyNow(product: Product, quantity = 1) {
     if (product.stock_quantity <= 0) {
       alert("This product is out of stock.");
       return;
     }
 
-    setWhatsappOrderUrl("");
-    setLastOrderNumber("");
-    setLastOrderTotal(null);
+    clearOrderSuccess();
 
-    // Do not add this product to the cart.
-    // Checkout will contain this product only.
+    // This does not add anything to the saved cart.
     setBuyNowItem({
       productId: product.id,
-      quantity: 1,
+      quantity: Math.min(quantity, product.stock_quantity),
     });
 
     setCartOpen(true);
@@ -405,6 +479,12 @@ export default function Home() {
       delete next[id];
       return next;
     });
+  }
+
+  function openProductDetails(product: Product) {
+    setSelectedProduct(product);
+    setSelectedImageIndex(0);
+    setDetailQuantity(1);
   }
 
   const loadOrders = useCallback(async () => {
@@ -430,6 +510,7 @@ export default function Home() {
       setOrders((data ?? []) as OrderRow[]);
     } catch (error) {
       console.error("Could not load order history:", error);
+
       setOrdersError(
         "Could not load orders. Please check your order-history permissions."
       );
@@ -470,7 +551,7 @@ export default function Home() {
     if (error) throw error;
   }
 
-  async function signInWithEmail(e: React.FormEvent<HTMLFormElement>) {
+  async function signInWithEmail(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAuthBusy(true);
     setAuthMessage("");
@@ -496,7 +577,7 @@ export default function Home() {
     }
   }
 
-  async function signUpWithEmail(e: React.FormEvent<HTMLFormElement>) {
+  async function signUpWithEmail(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAuthBusy(true);
     setAuthMessage("");
@@ -562,6 +643,7 @@ export default function Home() {
           ? error.message
           : "Google sign-in could not start."
       );
+
       setAuthBusy(false);
     }
   }
@@ -579,7 +661,7 @@ export default function Home() {
     setAccountOpen(false);
   }
 
-  async function updateProfile(e: React.FormEvent<HTMLFormElement>) {
+  async function updateProfile(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user) return;
 
@@ -632,7 +714,6 @@ export default function Home() {
       return;
     }
 
-    // Recheck stock before attempting checkout.
     for (const item of checkoutItems) {
       if (
         item.quantity <= 0 ||
@@ -681,7 +762,11 @@ export default function Home() {
 
       const result = (await response.json()) as CheckoutResponse;
 
-      if (!response.ok || result.success !== true || !result.order_number) {
+      if (
+        !response.ok ||
+        result.success !== true ||
+        !result.order_number
+      ) {
         alert(
           result.error ||
             "We couldn't save your order. Please check your cart and try again."
@@ -737,13 +822,12 @@ export default function Home() {
         return;
       }
 
-      // Show the WhatsApp link on the page instead of opening a popup.
       setLastOrderNumber(result.order_number);
       setLastOrderTotal(savedTotal);
       setWhatsappOrderUrl(whatsappUrl);
 
-      // Normal cart checkout clears the purchased cart.
-      // Buy Now leaves the customer's existing cart unchanged.
+      // A normal cart order clears the cart.
+      // Buy Now leaves the saved cart untouched.
       if (!buyNowItem) {
         setCart({});
       }
@@ -772,9 +856,7 @@ export default function Home() {
   }
 
   function resetCheckoutSuccess() {
-    setWhatsappOrderUrl("");
-    setLastOrderNumber("");
-    setLastOrderTotal(null);
+    clearOrderSuccess();
     setBuyNowItem(null);
   }
 
@@ -784,6 +866,7 @@ export default function Home() {
         Apna Mall Pakistan · Quality Products · Great Prices
       </div>
 
+      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-2">
@@ -799,18 +882,25 @@ export default function Home() {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => {
                   setAccountOpen(true);
                   setAuthMessage("");
                 }}
                 className="rounded-lg border border-[#075b3b] px-2 py-2 text-xs font-bold text-[#075b3b] sm:px-4 sm:py-3 sm:text-sm"
               >
-                {authLoading ? "Account..." : user ? "My Account" : "Login"}
+                {authLoading
+                  ? "Account..."
+                  : user
+                    ? "My Account"
+                    : "Login"}
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   setBuyNowItem(null);
+                  clearOrderSuccess();
                   setCartOpen(true);
                 }}
                 className="whitespace-nowrap rounded-lg bg-[#075b3b] px-3 py-2 text-xs font-bold text-white sm:px-4 sm:py-3 sm:text-sm"
@@ -838,6 +928,7 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Hero section */}
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
           <div>
@@ -848,12 +939,15 @@ export default function Home() {
             <h1 className="mt-3 text-5xl font-black leading-tight text-[#075b3b] md:text-6xl">
               Better Products.
               <br />
-              <span className="text-[#e6a000]">Brighter Living.</span>
+              <span className="text-[#e6a000]">
+                Brighter Living.
+              </span>
             </h1>
 
             <p className="mt-5 max-w-xl leading-7 text-gray-700">
-              Shop useful gadgets, fashion accessories, and home essentials.
-              Browse products, save your cart, and place your order online.
+              Shop useful gadgets, fashion accessories, and home
+              essentials. Browse detailed product information, save
+              your cart, and place your order through WhatsApp.
             </p>
 
             <a
@@ -873,6 +967,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Store benefits */}
       <section className="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-5 py-6 md:grid-cols-4">
         {[
           ["🛡️", "Customer Care"],
@@ -890,18 +985,21 @@ export default function Home() {
         ))}
       </section>
 
+      {/* Product listing */}
       <section id="products" className="mx-auto max-w-7xl px-5 pb-20">
         <h2 className="text-3xl font-black text-[#075b3b]">
           Featured Products
         </h2>
 
         <p className="mt-2 text-gray-600">
-          Browse products available in our store.
+          Explore our products and open any item to see its details,
+          pictures, and video.
         </p>
 
         <div className="my-6 flex flex-wrap gap-2">
           {categories.map((c) => (
             <button
+              type="button"
               key={c}
               onClick={() => setCategory(c)}
               className={`rounded-full border px-4 py-2 text-sm font-semibold ${
@@ -925,6 +1023,7 @@ export default function Home() {
           <div className="rounded-xl border border-red-200 bg-white p-8 text-center">
             <p className="text-red-700">{loadError}</p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
               className="mt-4 rounded-lg bg-[#075b3b] px-5 py-3 font-bold text-white"
             >
@@ -938,34 +1037,46 @@ export default function Home() {
             {visibleProducts.map((p) => (
               <article
                 key={p.id}
-                className="overflow-hidden rounded-2xl border border-gray-200 bg-white"
+                className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:-translate-y-1 hover:shadow-lg"
               >
-                <div className="flex h-36 items-center justify-center overflow-hidden bg-gradient-to-br from-[#edf5eb] to-[#fff5d9]">
-                  {p.image_url ? (
+                <button
+                  type="button"
+                  onClick={() => openProductDetails(p)}
+                  className="flex h-36 w-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#edf5eb] to-[#fff5d9] sm:h-48"
+                  aria-label={`View details for ${p.name}`}
+                >
+                  {p.image_urls.length > 0 ? (
                     <img
-                      src={p.image_url}
+                      src={p.image_urls[0]}
                       alt={p.name}
-                      className="h-full w-full object-contain"
+                      loading="lazy"
+                      className="h-full w-full object-contain transition duration-300 hover:scale-105"
                     />
                   ) : (
                     <span className="text-6xl">{p.emoji}</span>
                   )}
-                </div>
+                </button>
 
-                <div className="flex flex-col p-4">
+                <div className="flex flex-1 flex-col p-3 sm:p-4">
                   <p className="text-xs uppercase tracking-wider text-gray-500">
                     {p.category}
                   </p>
 
-                  <h3 className="mt-2 min-h-10 font-bold">{p.name}</h3>
+                  <button
+                    type="button"
+                    onClick={() => openProductDetails(p)}
+                    className="mt-2 min-h-10 text-left font-bold hover:text-[#08784b]"
+                  >
+                    {p.name}
+                  </button>
 
                   {p.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-gray-500">
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
                       {p.description}
                     </p>
                   )}
 
-                  <p className="mt-2 text-xl font-black text-[#075b3b]">
+                  <p className="mt-3 text-lg font-black text-[#075b3b] sm:text-xl">
                     {money(p.price)}
                   </p>
 
@@ -975,22 +1086,34 @@ export default function Home() {
                       : "Out of stock"}
                   </p>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="mt-auto space-y-2 pt-4">
                     <button
-                      disabled={p.stock_quantity <= 0}
-                      onClick={() => addToCart(p)}
-                      className="rounded-lg border border-[#075b3b] px-2 py-3 text-sm font-bold text-[#075b3b] hover:bg-[#edf5eb] disabled:cursor-not-allowed disabled:opacity-40"
+                      type="button"
+                      onClick={() => openProductDetails(p)}
+                      className="w-full rounded-lg border border-[#075b3b] px-2 py-2.5 text-sm font-bold text-[#075b3b] hover:bg-[#edf5eb]"
                     >
-                      Add to Cart
+                      View Details
                     </button>
 
-                    <button
-                      disabled={p.stock_quantity <= 0}
-                      onClick={() => startBuyNow(p)}
-                      className="rounded-lg bg-[#075b3b] px-2 py-3 text-sm font-bold text-white hover:bg-[#06472f] disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Buy Now
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={p.stock_quantity <= 0}
+                        onClick={() => addToCart(p)}
+                        className="rounded-lg border border-[#075b3b] px-2 py-3 text-xs font-bold text-[#075b3b] hover:bg-[#edf5eb] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+                      >
+                        Add to Cart
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={p.stock_quantity <= 0}
+                        onClick={() => startBuyNow(p)}
+                        className="rounded-lg bg-[#075b3b] px-2 py-3 text-xs font-bold text-white hover:bg-[#06472f] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+                      >
+                        Buy Now
+                      </button>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -1005,6 +1128,7 @@ export default function Home() {
         )}
       </section>
 
+      {/* Footer */}
       <footer className="bg-[#102f22] px-5 py-9 text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-6">
           <div>
@@ -1022,6 +1146,7 @@ export default function Home() {
             <p className="text-sm text-gray-300">
               apnamall6260@gmail.com
             </p>
+
             <a
               href={`https://wa.me/${whatsappNumber}`}
               target="_blank"
@@ -1034,10 +1159,238 @@ export default function Home() {
         </div>
       </footer>
 
+      {/* Product details and media gallery */}
+      {selectedProduct && (
+        <div
+          className="fixed inset-0 z-40 overflow-y-auto bg-black/60 p-3 sm:p-6"
+          onClick={() => setSelectedProduct(null)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selectedProduct.name} product details`}
+            className="relative mx-auto my-4 w-full max-w-5xl rounded-2xl bg-white p-4 shadow-2xl sm:my-8 sm:p-7"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <p className="font-bold text-[#075b3b]">
+                Product Details
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setSelectedProduct(null)}
+                aria-label="Close product details"
+                className="rounded-lg bg-gray-100 px-4 py-2 font-bold"
+              >
+                Close ✕
+              </button>
+            </div>
+
+            <div className="grid gap-7 md:grid-cols-2">
+              {/* Images and video */}
+              <div className="min-w-0">
+                <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#edf5eb] to-[#fff5d9] sm:min-h-96">
+                  {selectedProduct.image_urls.length > 0 ? (
+                    <img
+                      src={
+                        selectedProduct.image_urls[
+                          Math.min(
+                            selectedImageIndex,
+                            selectedProduct.image_urls.length - 1
+                          )
+                        ]
+                      }
+                      alt={selectedProduct.name}
+                      className="max-h-[480px] w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-8xl">
+                      {selectedProduct.emoji}
+                    </span>
+                  )}
+                </div>
+
+                {selectedProduct.image_urls.length > 1 && (
+                  <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+                    {selectedProduct.image_urls.map((url, index) => (
+                      <button
+                        type="button"
+                        key={`${url}-${index}`}
+                        onClick={() => setSelectedImageIndex(index)}
+                        aria-label={`View product image ${index + 1}`}
+                        aria-pressed={selectedImageIndex === index}
+                        className={`h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${
+                          selectedImageIndex === index
+                            ? "border-[#075b3b]"
+                            : "border-gray-200"
+                        }`}
+                      >
+                        <img
+                          src={url}
+                          alt={`${selectedProduct.name} view ${index + 1}`}
+                          loading="lazy"
+                          className="h-full w-full object-contain"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedProduct.video_url && (
+                  <div className="mt-5">
+                    <h3 className="mb-2 font-bold text-[#075b3b]">
+                      Product Video
+                    </h3>
+
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="max-h-96 w-full rounded-xl bg-black"
+                      src={selectedProduct.video_url}
+                    >
+                      Your browser does not support video playback.
+                    </video>
+                  </div>
+                )}
+              </div>
+
+              {/* Product information */}
+              <div className="flex flex-col">
+                <p className="text-sm font-bold uppercase tracking-wider text-[#08784b]">
+                  {selectedProduct.category}
+                </p>
+
+                <h2 className="mt-2 break-words text-3xl font-black text-[#075b3b]">
+                  {selectedProduct.name}
+                </h2>
+
+                <p className="mt-4 text-3xl font-black">
+                  {money(selectedProduct.price)}
+                </p>
+
+                <p
+                  className={`mt-3 text-sm font-semibold ${
+                    selectedProduct.stock_quantity > 0
+                      ? "text-green-700"
+                      : "text-red-600"
+                  }`}
+                >
+                  {selectedProduct.stock_quantity > 0
+                    ? `In stock — ${selectedProduct.stock_quantity} available`
+                    : "Currently out of stock"}
+                </p>
+
+                <div className="my-5 border-t" />
+
+                <h3 className="font-bold">Product Description</h3>
+
+                <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-gray-600">
+                  {selectedProduct.description?.trim() ||
+                    "No detailed description is available for this product yet."}
+                </p>
+
+                <div className="mt-6">
+                  <label className="block text-sm font-bold">
+                    Quantity
+                  </label>
+
+                  <div className="mt-2 flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDetailQuantity((q) => Math.max(1, q - 1))
+                      }
+                      disabled={detailQuantity <= 1}
+                      className="h-10 w-10 rounded-lg border font-bold disabled:opacity-40"
+                    >
+                      −
+                    </button>
+
+                    <span className="min-w-6 text-center font-bold">
+                      {detailQuantity}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDetailQuantity((q) =>
+                          Math.min(
+                            selectedProduct.stock_quantity,
+                            q + 1
+                          )
+                        )
+                      }
+                      disabled={
+                        detailQuantity >= selectedProduct.stock_quantity
+                      }
+                      className="h-10 w-10 rounded-lg border font-bold disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl bg-[#f7f8f4] p-4">
+                  <span className="font-semibold">Total</span>
+                  <span className="text-xl font-black text-[#075b3b]">
+                    {money(
+                      selectedProduct.price * detailQuantity
+                    )}
+                  </span>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    disabled={selectedProduct.stock_quantity <= 0}
+                    onClick={() => {
+                      const success = addProductQuantity(
+                        selectedProduct,
+                        detailQuantity
+                      );
+
+                      if (success) {
+                        setSelectedProduct(null);
+                      }
+                    }}
+                    className="rounded-lg border border-[#075b3b] px-4 py-3 font-bold text-[#075b3b] disabled:opacity-40"
+                  >
+                    Add to Cart
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={selectedProduct.stock_quantity <= 0}
+                    onClick={() => {
+                      const product = selectedProduct;
+                      const quantity = detailQuantity;
+
+                      setSelectedProduct(null);
+                      startBuyNow(product, quantity);
+                    }}
+                    className="rounded-lg bg-[#075b3b] px-4 py-3 font-bold text-white disabled:opacity-40"
+                  >
+                    Buy Now
+                  </button>
+                </div>
+
+                <p className="mt-4 text-xs leading-5 text-gray-500">
+                  Orders are processed through the existing Apna Mall
+                  checkout and WhatsApp process.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* Cart and checkout panel */}
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/50">
           <button
+            type="button"
             aria-label="Close cart overlay"
             className="absolute inset-0 cursor-default"
             onClick={() => setCartOpen(false)}
@@ -1050,6 +1403,7 @@ export default function Home() {
               </h2>
 
               <button
+                type="button"
                 onClick={() => {
                   setBuyNowItem(null);
                   setCartOpen(false);
@@ -1064,6 +1418,7 @@ export default function Home() {
               <div className="mt-4 rounded-lg bg-[#fff5d9] p-3 text-sm">
                 You are buying only the selected product. Your other cart
                 items will remain saved.
+
                 <button
                   type="button"
                   onClick={() => setBuyNowItem(null)}
@@ -1092,15 +1447,33 @@ export default function Home() {
                   <div key={p.id} className="border-b pb-4">
                     <div className="flex justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-bold">{p.name}</p>
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f7f8f4]">
+                            {p.image_urls.length > 0 ? (
+                              <img
+                                src={p.image_urls[0]}
+                                alt={p.name}
+                                className="h-full w-full object-contain"
+                              />
+                            ) : (
+                              <span className="text-2xl">🛍️</span>
+                            )}
+                          </div>
 
-                        <p className="text-sm text-gray-500">
-                          {money(p.price)} each
-                        </p>
+                          <div className="min-w-0">
+                            <p className="break-words font-bold">
+                              {p.name}
+                            </p>
 
-                        <p className="mt-1 font-semibold text-[#075b3b]">
-                          {money(p.price * p.quantity)}
-                        </p>
+                            <p className="text-sm text-gray-500">
+                              {money(p.price)} each
+                            </p>
+
+                            <p className="mt-1 font-semibold text-[#075b3b]">
+                              {money(p.price * p.quantity)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex shrink-0 items-start gap-2">
@@ -1136,7 +1509,9 @@ export default function Home() {
                           onClick={() => {
                             if (buyNowItem) {
                               if (p.quantity >= p.stock_quantity) {
-                                alert("You have reached the available stock.");
+                                alert(
+                                  "You have reached the available stock."
+                                );
                                 return;
                               }
 
@@ -1186,6 +1561,7 @@ export default function Home() {
                     ? "Selected total"
                     : "Cart total"}
               </span>
+
               <span>
                 {money(
                   whatsappOrderUrl && lastOrderTotal !== null
@@ -1199,15 +1575,18 @@ export default function Home() {
               <div className="space-y-4 rounded-xl border border-green-200 bg-green-50 p-5">
                 <div className="text-center">
                   <p className="text-2xl">✅</p>
+
                   <h3 className="mt-2 text-lg font-black text-[#075b3b]">
                     Order Saved Successfully!
                   </h3>
+
                   <p className="mt-2 text-sm text-gray-700">
                     Order number: <strong>{lastOrderNumber}</strong>
                   </p>
+
                   <p className="mt-2 text-sm text-gray-600">
-                    Tap the button below to open WhatsApp and send your order
-                    to Apna Mall.
+                    Tap below to open WhatsApp and send your order to
+                    Apna Mall.
                   </p>
                 </div>
 
@@ -1221,9 +1600,7 @@ export default function Home() {
                 </a>
 
                 <p className="text-center text-xs leading-5 text-gray-600">
-                  If WhatsApp does not open, try the button again or choose
-                  WhatsApp when your phone asks which app to use. You must
-                  press Send in WhatsApp to send the message.
+                  You must press Send in WhatsApp to send the message.
                 </p>
 
                 <button
@@ -1319,9 +1696,9 @@ export default function Home() {
             )}
 
             <p className="mt-4 text-xs leading-5 text-gray-500">
-              Your order is saved before WhatsApp opens. You must press Send
-              in WhatsApp to contact the store. Buy Now orders contain only
-              the selected product. Your other cart items stay saved.
+              Your order is saved before WhatsApp opens. You must press
+              Send in WhatsApp to contact the store. Buy Now orders contain
+              only the selected product. Your other cart items stay saved.
             </p>
           </aside>
         </div>
@@ -1331,6 +1708,7 @@ export default function Home() {
       {accountOpen && (
         <div className="fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/50 p-4">
           <button
+            type="button"
             aria-label="Close account panel"
             className="fixed inset-0 cursor-default"
             onClick={() => setAccountOpen(false)}
@@ -1343,6 +1721,7 @@ export default function Home() {
               </h2>
 
               <button
+                type="button"
                 onClick={() => setAccountOpen(false)}
                 className="rounded-lg bg-gray-100 px-3 py-2"
               >
@@ -1351,7 +1730,9 @@ export default function Home() {
             </div>
 
             {authLoading ? (
-              <p className="py-8 text-gray-500">Checking your account...</p>
+              <p className="py-8 text-gray-500">
+                Checking your account...
+              </p>
             ) : user ? (
               <div className="mt-5 space-y-5">
                 <div className="rounded-xl bg-[#edf5eb] p-4">
@@ -1424,9 +1805,12 @@ export default function Home() {
 
                 <div className="border-t pt-4">
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-bold text-[#075b3b]">My Orders</h3>
+                    <h3 className="font-bold text-[#075b3b]">
+                      My Orders
+                    </h3>
 
                     <button
+                      type="button"
                       onClick={() => void loadOrders()}
                       className="text-sm font-semibold underline"
                     >
@@ -1450,8 +1834,8 @@ export default function Home() {
                     !ordersError &&
                     orders.length === 0 && (
                       <p className="py-4 text-sm text-gray-500">
-                        No orders are linked to this account yet. Previous
-                        guest orders are not automatically linked.
+                        No orders are linked to this account yet.
+                        Previous guest orders are not automatically linked.
                       </p>
                     )}
 
@@ -1494,6 +1878,7 @@ export default function Home() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => void signOut()}
                   className="w-full rounded-lg border border-red-200 p-3 font-bold text-red-700"
                 >
@@ -1504,6 +1889,7 @@ export default function Home() {
               <div className="mt-5">
                 <div className="grid grid-cols-2 gap-2">
                   <button
+                    type="button"
                     onClick={() => {
                       setAuthMode("login");
                       setAuthMessage("");
@@ -1518,6 +1904,7 @@ export default function Home() {
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => {
                       setAuthMode("signup");
                       setAuthMessage("");
@@ -1602,6 +1989,7 @@ export default function Home() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => void signInWithGoogle()}
                   disabled={authBusy}
                   className="w-full rounded-lg border border-gray-300 p-3 font-bold disabled:opacity-50"
@@ -1619,8 +2007,9 @@ export default function Home() {
                 )}
 
                 <p className="mt-4 text-xs leading-5 text-gray-500">
-                  You can place orders without creating an account. Guest
-                  orders are saved but do not appear in account order history.
+                  You can place orders without creating an account.
+                  Guest orders are saved but do not appear in account
+                  order history.
                 </p>
               </div>
             )}
