@@ -6,13 +6,23 @@ export async function POST(request: Request) {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!url || !secret) {
+  const missing = [];
 
-    if (!url || !secret) {
-      return NextResponse.json(
-        { success: false, error: "Server configuration is missing." },
-        { status: 500 }
-      );
-    }
+  if (!url) missing.push("NEXT_PUBLIC_SUPABASE_URL");
+  if (!secret) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+
+  console.error("Checkout configuration missing:", missing);
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Server configuration is missing.",
+      missing,
+    },
+    { status: 500 }
+  );
+}
 
     const supabase = createClient(url, secret, {
       auth: {
