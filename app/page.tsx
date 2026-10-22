@@ -63,7 +63,7 @@ type OrderRow = {
 };
 
 const whatsappNumber = "923291311746";
-const CART_STORAGE_KEY = "apna-mall-cart-v1";
+const CART_STORAGE_KEY = "Kamalia-Cart-cart-v1";
 
 const money = (amount: number) =>
   `Rs ${amount.toLocaleString("en-PK")}`;
@@ -874,7 +874,7 @@ export default function Home() {
               href="#"
               className="shrink-0 text-xl font-black leading-tight text-[#075b3b] sm:text-2xl"
             >
-              Apna <span className="text-[#e6a000]">Mall</span>
+              Kamalia <span className="text-[#e6a000]">Cart</span>
               <span className="mt-1 block text-center text-[9px] tracking-[4px]">
                 PAKISTAN
               </span>
@@ -1144,7 +1144,7 @@ export default function Home() {
               WhatsApp: +92 329 1311746
             </p>
             <p className="text-sm text-gray-300">
-              apnamall6260@gmail.com
+              kamaliacart6260@gmail.com
             </p>
 
             <a
