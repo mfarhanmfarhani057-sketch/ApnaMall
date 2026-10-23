@@ -548,40 +548,44 @@ export default function Home() {
   }, [user, accountOpen, loadOrders]);
 
   useEffect(() => {
-    const elements = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-reveal]")
+    const revealElements = document.querySelectorAll<HTMLElement>(
+      ".reveal-animate"
     );
 
-    if (!elements.length) return;
+    if (!revealElements.length) return;
 
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-
-    if (prefersReducedMotion || !("IntersectionObserver" in window)) {
-      elements.forEach((element) => element.classList.add("is-visible"));
+    if (
+      !("IntersectionObserver" in window) ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      revealElements.forEach((element) => {
+        element.classList.add("is-visible");
+      });
       return;
     }
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
+          const target = entry.target as HTMLElement;
+
           if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
+            target.classList.add("is-visible");
+          } else {
+            target.classList.remove("is-visible");
           }
         });
       },
       {
-        threshold: 0.12,
+        threshold: [0.15, 0.4],
         rootMargin: "0px 0px -8% 0px",
       }
     );
 
-    elements.forEach((element) => observer.observe(element));
+    revealElements.forEach((element) => observer.observe(element));
 
     return () => observer.disconnect();
-  }, [products.length, category, loading, search, visibleProducts.length]);
+  }, [products.length, category, loading, search, visibleProducts.length, selectedProduct]);
 
   async function saveProfile(
     profileUser: User,
@@ -1029,11 +1033,7 @@ export default function Home() {
 
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
-          <div
-            data-reveal
-            data-direction="left"
-            style={{ transitionDelay: "120ms" }}
-          >
+          <div className="reveal-animate" data-direction="left" style={{ transitionDelay: "120ms" }}>
             <p className="font-bold uppercase tracking-[3px] text-[#08784b]">
               Welcome to Kamalia Cart
             </p>
@@ -1052,8 +1052,7 @@ export default function Home() {
 
             <a
               href="#products"
-              className="mt-7 inline-block rounded-lg bg-[#075b3b] px-6 py-3 font-bold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#06472f]"
-              data-reveal
+              className="reveal-animate mt-7 inline-block rounded-lg bg-[#075b3b] px-6 py-3 font-bold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#06472f]"
               data-direction="up"
               style={{ transitionDelay: "220ms" }}
             >
@@ -1062,8 +1061,7 @@ export default function Home() {
           </div>
 
           <div
-            className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-white bg-white/80 p-8 shadow-sm"
-            data-reveal
+            className="reveal-animate flex min-h-56 flex-col items-center justify-center rounded-3xl border border-white bg-white/80 p-8 shadow-sm"
             data-direction="right"
             style={{ transitionDelay: "180ms" }}
           >
@@ -1084,8 +1082,7 @@ export default function Home() {
         ].map(([emoji, label], index) => (
           <div
             key={label}
-            className="rounded-xl border border-[#edf0ea] bg-white p-4 text-center font-bold text-[#075b3b] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
-            data-reveal
+            className="reveal-animate rounded-xl border border-[#edf0ea] bg-white p-4 text-center font-bold text-[#075b3b] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
             data-direction={index % 2 === 0 ? "left" : "right"}
             style={{ transitionDelay: `${140 + index * 80}ms` }}
           >
@@ -1097,16 +1094,14 @@ export default function Home() {
 
       <section id="products" className="mx-auto max-w-7xl px-5 pb-20">
         <h2
-          className="text-3xl font-black text-[#075b3b]"
-          data-reveal
+          className="reveal-animate text-3xl font-black text-[#075b3b]"
           data-direction="up"
         >
           Featured Products
         </h2>
 
         <p
-          className="mt-2 text-gray-600"
-          data-reveal
+          className="reveal-animate mt-2 text-gray-600"
           data-direction="up"
           style={{ transitionDelay: "80ms" }}
         >
@@ -1120,12 +1115,11 @@ export default function Home() {
               type="button"
               key={c}
               onClick={() => setCategory(c)}
-              className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-300 ${
+              className={`reveal-animate rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-300 ${
                 category === c
                   ? "border-[#075b3b] bg-[#075b3b] text-white shadow-sm"
                   : "border-gray-200 bg-white hover:border-[#b8d5bf] hover:bg-[#f3f8f3]"
               }`}
-              data-reveal
               data-direction={index % 2 === 0 ? "left" : "right"}
               style={{ transitionDelay: `${120 + index * 40}ms` }}
             >
@@ -1158,8 +1152,7 @@ export default function Home() {
             {visibleProducts.map((p, index) => (
               <article
                 key={p.id}
-                className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-400 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(7,91,59,0.12)]"
-                data-reveal
+                className="reveal-animate group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-400 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(7,91,59,0.12)]"
                 data-direction={
                   index % 3 === 0 ? "left" : index % 3 === 1 ? "right" : "up"
                 }
@@ -1289,7 +1282,8 @@ export default function Home() {
             role="dialog"
             aria-modal="true"
             aria-label={`${selectedProduct.name} product details`}
-            className="relative mx-auto my-4 w-full max-w-5xl rounded-2xl bg-white p-4 shadow-2xl sm:my-8 sm:p-7"
+            className="reveal-animate relative mx-auto my-4 w-full max-w-5xl rounded-2xl bg-white p-4 shadow-2xl sm:my-8 sm:p-7"
+            data-direction="up"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between gap-3">
@@ -1307,7 +1301,7 @@ export default function Home() {
 
             <div className="grid gap-7 md:grid-cols-2">
               <div className="min-w-0">
-                <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#edf5eb] to-[#fff5d9] sm:min-h-96">
+                <div className="reveal-animate flex min-h-72 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#edf5eb] to-[#fff5d9] sm:min-h-96" data-direction="left" style={{ transitionDelay: "80ms" }}>
                   {selectedProduct.image_urls.length > 0 ? (
                     <img
                       src={
@@ -1353,7 +1347,7 @@ export default function Home() {
                 )}
 
                 {selectedProduct.video_url && (
-                  <div className="mt-5">
+                  <div className="reveal-animate mt-5" data-direction="up" style={{ transitionDelay: "140ms" }}>
                     <h3 className="mb-2 font-bold text-[#075b3b]">
                       Product Video
                     </h3>
@@ -1372,38 +1366,40 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col">
-                <p className="text-sm font-bold uppercase tracking-wider text-[#08784b]">
+                <p className="reveal-animate text-sm font-bold uppercase tracking-wider text-[#08784b]" data-direction="up" style={{ transitionDelay: "110ms" }}>
                   {selectedProduct.category}
                 </p>
 
-                <h2 className="mt-2 break-words text-3xl font-black text-[#075b3b]">
+                <h2 className="reveal-animate mt-2 break-words text-3xl font-black text-[#075b3b]" data-direction="up" style={{ transitionDelay: "150ms" }}>
                   {selectedProduct.name}
                 </h2>
 
-                <p className="mt-4 text-3xl font-black">{money(selectedProduct.price)}</p>
+                <p className="reveal-animate mt-4 text-3xl font-black" data-direction="up" style={{ transitionDelay: "190ms" }}>{money(selectedProduct.price)}</p>
 
                 <p
-                  className={`mt-3 text-sm font-semibold ${
+                  className={`reveal-animate mt-3 text-sm font-semibold ${
                     selectedProduct.stock_quantity > 0
                       ? "text-green-700"
                       : "text-red-600"
                   }`}
+                  data-direction="up"
+                  style={{ transitionDelay: "220ms" }}
                 >
                   {selectedProduct.stock_quantity > 0
                     ? `In stock — ${selectedProduct.stock_quantity} available`
                     : "Currently out of stock"}
                 </p>
 
-                <div className="my-5 border-t" />
+                <div className="reveal-animate my-5 border-t" data-direction="up" style={{ transitionDelay: "240ms" }} />
 
-                <h3 className="font-bold">Product Description</h3>
+                <h3 className="reveal-animate font-bold" data-direction="up" style={{ transitionDelay: "260ms" }}>Product Description</h3>
 
-                <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-gray-600">
+                <p className="reveal-animate mt-2 whitespace-pre-wrap break-words leading-7 text-gray-600" data-direction="up" style={{ transitionDelay: "300ms" }}>
                   {selectedProduct.description?.trim() ||
                     "No detailed description is available for this product yet."}
                 </p>
 
-                <div className="mt-6">
+                <div className="reveal-animate mt-6" data-direction="up" style={{ transitionDelay: "330ms" }}>
                   <label className="block text-sm font-bold">Quantity</label>
 
                   <div className="mt-2 flex items-center gap-4">
@@ -1433,14 +1429,14 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl bg-[#f7f8f4] p-4">
+                <div className="reveal-animate mt-5 flex items-center justify-between gap-3 rounded-xl bg-[#f7f8f4] p-4" data-direction="up" style={{ transitionDelay: "360ms" }}>
                   <span className="font-semibold">Total</span>
                   <span className="text-xl font-black text-[#075b3b]">
                     {money(selectedProduct.price * detailQuantity)}
                   </span>
                 </div>
 
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="reveal-animate mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2" data-direction="up" style={{ transitionDelay: "390ms" }}>
                   <button
                     type="button"
                     disabled={selectedProduct.stock_quantity <= 0}
@@ -1475,7 +1471,7 @@ export default function Home() {
                   </button>
                 </div>
 
-                <p className="mt-4 text-xs leading-5 text-gray-500">
+                <p className="reveal-animate mt-4 text-xs leading-5 text-gray-500" data-direction="up" style={{ transitionDelay: "420ms" }}>
                   Orders are processed through the existing Kamalia Cart checkout
                   and WhatsApp process.
                 </p>
