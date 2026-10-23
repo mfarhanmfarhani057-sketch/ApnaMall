@@ -547,6 +547,42 @@ export default function Home() {
     }
   }, [user, accountOpen, loadOrders]);
 
+  useEffect(() => {
+    const elements = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-reveal]")
+    );
+
+    if (!elements.length) return;
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+
+    if (prefersReducedMotion || !("IntersectionObserver" in window)) {
+      elements.forEach((element) => element.classList.add("is-visible"));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      {
+        threshold: 0.12,
+        rootMargin: "0px 0px -8% 0px",
+      }
+    );
+
+    elements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, [products.length, category, loading, search, visibleProducts.length]);
+
   async function saveProfile(
     profileUser: User,
     profileName: string,
@@ -844,12 +880,12 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f8f4] text-[#17251d]">
+    <main className="min-h-screen overflow-x-hidden bg-[#f7f8f4] text-[#17251d]">
       <div className="bg-[#075b3b] px-4 py-2 text-center text-sm text-white">
         Kamalia Cart Pakistan · Quality Products · Great Prices
       </div>
 
-      <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5] shadow-sm">
+      <header className="sticky top-0 z-20 border-b border-[#e1e8df] bg-[#fffdf5]/95 shadow-sm backdrop-blur-sm transition-colors duration-300">
         <div className="mx-auto max-w-7xl px-3 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <a
@@ -870,7 +906,7 @@ export default function Home() {
                   clearOrderSuccess();
                   setCartOpen(true);
                 }}
-                className="whitespace-nowrap rounded-lg bg-[#075b3b] px-3 py-2 text-xs font-bold text-white sm:px-4 sm:py-3 sm:text-sm"
+                className="whitespace-nowrap rounded-lg bg-[#075b3b] px-3 py-2 text-xs font-bold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#06472f] sm:px-4 sm:py-3 sm:text-sm"
               >
                 🛒 Cart ({count})
               </button>
@@ -926,7 +962,7 @@ export default function Home() {
                   placeholder="Search products..."
                   aria-label="Search products"
                   aria-expanded={searchFocused && search.trim().length > 0}
-                  className="w-full rounded-2xl border border-[#dfe7df] bg-white py-3 pl-10 pr-3 text-base shadow-sm outline-none transition focus:border-[#075b3b] focus:ring-2 focus:ring-[#075b3b]/10"
+                  className="w-full rounded-2xl border border-[#dfe7df] bg-white py-3 pl-10 pr-3 text-base shadow-sm outline-none transition-all duration-300 focus:border-[#075b3b] focus:ring-2 focus:ring-[#075b3b]/15"
                 />
               </div>
 
@@ -944,7 +980,7 @@ export default function Home() {
                             setSearchFocused(false);
                             setSearch("");
                           }}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${
                             activeSearchIndex === index
                               ? "bg-[#edf5eb]"
                               : "hover:bg-[#f7f9f6]"
@@ -993,7 +1029,11 @@ export default function Home() {
 
       <section className="bg-gradient-to-r from-[#e5f1e4] to-[#fff5d9]">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-16 md:grid-cols-[1.2fr_.8fr]">
-          <div>
+          <div
+            data-reveal
+            data-direction="left"
+            style={{ transitionDelay: "120ms" }}
+          >
             <p className="font-bold uppercase tracking-[3px] text-[#08784b]">
               Welcome to Kamalia Cart
             </p>
@@ -1012,13 +1052,21 @@ export default function Home() {
 
             <a
               href="#products"
-              className="mt-7 inline-block rounded-lg bg-[#075b3b] px-6 py-3 font-bold text-white"
+              className="mt-7 inline-block rounded-lg bg-[#075b3b] px-6 py-3 font-bold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#06472f]"
+              data-reveal
+              data-direction="up"
+              style={{ transitionDelay: "220ms" }}
             >
               Shop Products ↓
             </a>
           </div>
 
-          <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-white bg-white/80 p-8 shadow-sm">
+          <div
+            className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-white bg-white/80 p-8 shadow-sm"
+            data-reveal
+            data-direction="right"
+            style={{ transitionDelay: "180ms" }}
+          >
             <span className="text-8xl">🛍️</span>
             <p className="mt-5 text-center font-bold tracking-widest text-[#075b3b]">
               QUALITY · VALUE · CONVENIENCE
@@ -1033,10 +1081,13 @@ export default function Home() {
           ["🚚", "Delivery Options"],
           ["🏷️", "Great Prices"],
           ["💬", "WhatsApp Orders"],
-        ].map(([emoji, label]) => (
+        ].map(([emoji, label], index) => (
           <div
             key={label}
-            className="rounded-xl border bg-white p-4 text-center font-bold text-[#075b3b]"
+            className="rounded-xl border border-[#edf0ea] bg-white p-4 text-center font-bold text-[#075b3b] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+            data-reveal
+            data-direction={index % 2 === 0 ? "left" : "right"}
+            style={{ transitionDelay: `${140 + index * 80}ms` }}
           >
             <span className="block text-2xl">{emoji}</span>
             {label}
@@ -1045,24 +1096,38 @@ export default function Home() {
       </section>
 
       <section id="products" className="mx-auto max-w-7xl px-5 pb-20">
-        <h2 className="text-3xl font-black text-[#075b3b]">Featured Products</h2>
+        <h2
+          className="text-3xl font-black text-[#075b3b]"
+          data-reveal
+          data-direction="up"
+        >
+          Featured Products
+        </h2>
 
-        <p className="mt-2 text-gray-600">
+        <p
+          className="mt-2 text-gray-600"
+          data-reveal
+          data-direction="up"
+          style={{ transitionDelay: "80ms" }}
+        >
           Explore our products and open any item to see its details, pictures,
           and video.
         </p>
 
         <div className="my-6 flex flex-wrap gap-2">
-          {categories.map((c) => (
+          {categories.map((c, index) => (
             <button
               type="button"
               key={c}
               onClick={() => setCategory(c)}
-              className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-300 ${
                 category === c
-                  ? "border-[#075b3b] bg-[#075b3b] text-white"
-                  : "border-gray-200 bg-white"
+                  ? "border-[#075b3b] bg-[#075b3b] text-white shadow-sm"
+                  : "border-gray-200 bg-white hover:border-[#b8d5bf] hover:bg-[#f3f8f3]"
               }`}
+              data-reveal
+              data-direction={index % 2 === 0 ? "left" : "right"}
+              style={{ transitionDelay: `${120 + index * 40}ms` }}
             >
               {c === "All" ? "All products" : c}
             </button>
@@ -1081,7 +1146,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="mt-4 rounded-lg bg-[#075b3b] px-5 py-3 font-bold text-white"
+              className="mt-4 rounded-lg bg-[#075b3b] px-5 py-3 font-bold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#06472f]"
             >
               Try again
             </button>
@@ -1090,10 +1155,15 @@ export default function Home() {
 
         {!loading && !loadError && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {visibleProducts.map((p) => (
+            {visibleProducts.map((p, index) => (
               <article
                 key={p.id}
-                className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:-translate-y-1 hover:shadow-lg"
+                className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-400 hover:-translate-y-1.5 hover:shadow-[0_18px_40px_rgba(7,91,59,0.12)]"
+                data-reveal
+                data-direction={
+                  index % 3 === 0 ? "left" : index % 3 === 1 ? "right" : "up"
+                }
+                style={{ transitionDelay: `${index * 70}ms` }}
               >
                 <button
                   type="button"
@@ -1106,7 +1176,7 @@ export default function Home() {
                       src={p.image_urls[0]}
                       alt={p.name}
                       loading="lazy"
-                      className="h-full w-full object-contain transition duration-300 hover:scale-105"
+                      className="product-image h-full w-full object-contain transition-transform duration-400 group-hover:scale-105"
                     />
                   ) : (
                     <span className="text-6xl">{p.emoji}</span>
@@ -1121,7 +1191,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => openProductDetails(p)}
-                    className="mt-2 min-h-10 text-left font-bold hover:text-[#08784b]"
+                    className="mt-2 min-h-10 text-left font-bold text-[#17251d] transition-colors duration-200 hover:text-[#08784b]"
                   >
                     {p.name}
                   </button>
@@ -1146,7 +1216,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => openProductDetails(p)}
-                      className="w-full rounded-lg border border-[#075b3b] px-2 py-2.5 text-sm font-bold text-[#075b3b] hover:bg-[#edf5eb]"
+                      className="w-full rounded-lg border border-[#075b3b] px-2 py-2.5 text-sm font-bold text-[#075b3b] transition-all duration-300 hover:bg-[#edf5eb]"
                     >
                       View Details
                     </button>
@@ -1156,7 +1226,7 @@ export default function Home() {
                         type="button"
                         disabled={p.stock_quantity <= 0}
                         onClick={() => addToCart(p)}
-                        className="rounded-lg border border-[#075b3b] px-2 py-3 text-xs font-bold text-[#075b3b] hover:bg-[#edf5eb] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+                        className="rounded-lg border border-[#075b3b] px-2 py-3 text-xs font-bold text-[#075b3b] transition-all duration-300 hover:bg-[#edf5eb] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
                       >
                         Add to Cart
                       </button>
@@ -1165,7 +1235,7 @@ export default function Home() {
                         type="button"
                         disabled={p.stock_quantity <= 0}
                         onClick={() => startBuyNow(p)}
-                        className="rounded-lg bg-[#075b3b] px-2 py-3 text-xs font-bold text-white hover:bg-[#06472f] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+                        className="rounded-lg bg-[#075b3b] px-2 py-3 text-xs font-bold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#06472f] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
                       >
                         Buy Now
                       </button>
